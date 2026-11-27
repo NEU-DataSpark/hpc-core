@@ -16,6 +16,16 @@ The package uses semantic versioning, `MAJOR.MINOR.PATCH`.
 - **Test kit.** `hpc_core.testing` is not part of the public API. Its names and fixture files may
   change in any release, and each change to a golden case is listed in the release notes.
 
+## Version notes
+
+- **0.2.0** (minor, additive). Adds `squeue.CONSOLE_MONITOR`, the extended job id rule
+  (`is_extended_job_id`, `validate_extended_job_id`), and the `JobRecord` fields `node_count`,
+  `dependency_text` and `command`, which are keyword-only and unset unless a profile names them.
+  Exports `parse_squeue`, `SQUEUE_CONSOLE_MONITOR` and the id functions from `hpc_core.contract`.
+  Nothing is removed or renamed. The run-report columns and `schema_version` are unchanged. The
+  serializer in `hpc_core.testing` leaves the three new fields out of a record only when they are
+  unset, so existing golden files are byte-identical.
+
 ## Releasing
 
 The release draft workflow runs on pushes to `main` and can also be started manually on `main`.
@@ -25,7 +35,7 @@ the release or create a tag.
 After CI succeeds for a push to `main`, the release workflow also builds that exact commit and
 publishes a development release to PyPI. It derives the version by incrementing the patch component
 of `pyproject.toml` and appending `.devN`, where `N` is the CI run number multiplied by 1000 plus
-its attempt number. For example, `0.1.0` becomes `0.1.1.dev42001` for run 42, attempt 1. This patch
+its attempt number. For example, `0.2.0` becomes `0.2.1.dev42001` for run 42, attempt 1. This patch
 number is a snapshot identifier, not a promise about the next release version. The version change
 exists only in the build checkout; it is not committed. CI reruns get a new version, while rerunning
 the release workflow for the same CI attempt skips files already on PyPI.

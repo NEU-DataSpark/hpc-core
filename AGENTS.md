@@ -13,12 +13,15 @@
   e-mail addresses. Fixtures are anonymised; a new recording goes through `tools/scrub_fixture.py`
   and must pass `tools/hygiene_scan.py`. Never commit a raw recording.
 - Write code, tests, docs and commit messages in English.
-- Commands, run from the repository root:
-  - install: `python -m pip install -e ".[dev]"`
-  - tests: `python -m pytest`
-  - lint: `python -m ruff check .`
-  - type check: `python -m mypy`
-  - hygiene scan: `python tools/hygiene_scan.py`
-- Versioning: one version in `pyproject.toml`; a release tag `vX.Y.Z` must equal it. A change to
-  the run-report columns needs a new `schema_version`, a new header snapshot and a minor release.
-  See `docs/versioning.md`.
+- Python dependencies are managed with `uv`. `uv.lock` is committed. Commands, run from the
+  repository root:
+  - install: `uv sync --extra dev`
+  - lock check: `uv lock --check` (run `uv lock` after changing `pyproject.toml`)
+  - tests: `uv run pytest`
+  - lint: `uv run ruff check .`
+  - type check: `uv run mypy`
+  - hygiene scan: `uv run python tools/hygiene_scan.py`
+- Versioning: one version in `pyproject.toml`; a release tag `vX.Y.Z` must equal it. `uv.lock`
+  records the project version too, so run `uv lock` after changing it. A change to the run-report
+  columns needs a new `schema_version`, a new header snapshot and a minor release. See
+  `docs/versioning.md`.

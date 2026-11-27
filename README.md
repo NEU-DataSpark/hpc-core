@@ -24,37 +24,39 @@ the HPC Console uses `paramiko`. This package contains neither.
 
 ## Install
 
-Once a release has been published to PyPI, install a pinned version:
+Consumers use [`uv`](https://docs.astral.sh/uv/). Once a release has been published to PyPI, add a
+pinned version to the consumer's project:
 
 ```bash
-python -m pip install "hpc-core==X.Y.Z"
+uv add "hpc-core==X.Y.Z"
 ```
 
-To opt into the latest available development build from `main`:
+To opt into the latest available development build from `main`, in any environment:
 
 ```bash
-python -m pip install --pre --upgrade hpc-core
+uv pip install --pre --upgrade hpc-core
 ```
 
-Alternatively, install a tagged release directly from Git:
+Alternatively, add a tagged release directly from Git:
 
 ```bash
-python -m pip install "hpc-core @ git+https://github.com/NEU-DataSpark/hpc-core.git@vX.Y.Z"
+uv add "hpc-core @ git+https://github.com/NEU-DataSpark/hpc-core.git@vX.Y.Z"
 ```
 
 See [`docs/versioning.md`](docs/versioning.md) for the release process.
 
 ## Development
 
-Run these from the repository root in a virtual environment:
+Run these from the repository root. `uv` creates and uses `.venv` from the committed `uv.lock`:
 
 ```bash
-python -m pip install -e ".[dev]"   # install with the development tools
-python -m pytest                    # test suite, including layering, stdlib-only and hygiene guards
-python -m ruff check .              # lint
-python -m mypy                      # strict type check
-python tools/hygiene_scan.py        # scan for paths, addresses, e-mail addresses and key headers
-python -m pip wheel --no-deps -w dist .   # build the wheel
+uv sync --extra dev                  # install with the development tools
+uv lock --check                      # the lock file matches pyproject.toml
+uv run pytest                        # test suite, including layering, stdlib-only and hygiene guards
+uv run ruff check .                  # lint
+uv run mypy                          # strict type check
+uv run python tools/hygiene_scan.py  # scan for paths, addresses, e-mail addresses and key headers
+uv build --wheel --out-dir dist      # build the wheel
 ```
 
 Documentation is in [`docs/`](docs/): parsing, the run-report contract, the adapter, the consumer
