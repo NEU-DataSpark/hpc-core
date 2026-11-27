@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "hpc-core"
-version = "0.2.0"
+version = "0.3.0"
 description = "Dependency-free contract, transport interface and Slurm adapter for DataSpark HPC tools."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -45,3 +45,6 @@ files = ["src/hpc_core", "tests", "tools"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["tools"]
+# The NFS layer needs the testbed (tools/nfs-testbed/run.sh); it runs only when asked for with -m nfs.
+addopts = "-m 'not nfs'"
+markers = ["nfs: runs over the loopback NFS testbed in tools/nfs-testbed; excluded by default"]

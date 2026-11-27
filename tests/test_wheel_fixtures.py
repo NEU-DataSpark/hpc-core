@@ -56,8 +56,8 @@ def test_a_missing_skill_file_is_reported_by_path() -> None:
         "hpc_core/testing/fixtures/scheduler/a.txt",
         "hpc_core/testing/fixtures/reports/b.csv",
         "hpc_core/py.typed",
-        "hpc_core-0.2.0.dist-info/licenses/LICENSE",
-        "hpc_core-0.2.0.dist-info/licenses/NOTICE",
+        "hpc_core-0.3.0.dist-info/licenses/LICENSE",
+        "hpc_core-0.3.0.dist-info/licenses/NOTICE",
     ]
     assert missing_entries(names) == ["hpc_core/skills/hpc-scheduler-output/SKILL.md"]
 
