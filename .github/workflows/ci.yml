@@ -59,5 +59,12 @@ jobs:
           python-version: "3.14"
       - name: Build the wheel
         run: python -m pip wheel --no-deps -w dist .
-      - name: Check the fixtures and license files are packaged
+      - name: Check the fixtures, skills and license files are packaged
         run: python tools/check_wheel.py dist/hpc_core-*.whl
+      - name: Install the wheel in a clean environment and run the command line
+        run: |
+          python -m venv "$RUNNER_TEMP/hpc-core-cli"
+          "$RUNNER_TEMP/hpc-core-cli/bin/python" -m pip install --no-deps dist/hpc_core-*.whl
+          cd "$RUNNER_TEMP"
+          "$RUNNER_TEMP/hpc-core-cli/bin/hpc-core" --version
+          "$RUNNER_TEMP/hpc-core-cli/bin/hpc-core" skills list

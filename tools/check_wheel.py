@@ -1,6 +1,6 @@
-"""Check that a built wheel carries what the consumer contract and the license need.
+"""Check that a built wheel carries what the consumer contract, the CLI and the license need.
 
-    python tools/check_wheel.py dist/hpc_core-0.1.0-py3-none-any.whl
+    python tools/check_wheel.py dist/hpc_core-0.2.0-py3-none-any.whl
 
 Exits 0 when every required file is in the wheel, 1 when one is missing, and 2 for bad arguments.
 """
@@ -18,6 +18,11 @@ REQUIRED_PREFIXES = (
     "hpc_core/py.typed",
 )
 REQUIRED_SUFFIXES = ("/licenses/LICENSE", "/licenses/NOTICE")
+# The skills shipped with the package. Each is one folder holding SKILL.md, named by the skill.
+REQUIRED_FILES = (
+    "hpc_core/skills/hpc-scheduler-output/SKILL.md",
+    "hpc_core/skills/hpc-run-report/SKILL.md",
+)
 
 
 def missing_entries(names: Iterable[str]) -> list[str]:
@@ -30,6 +35,7 @@ def missing_entries(names: Iterable[str]) -> list[str]:
     missing += [
         suffix for suffix in REQUIRED_SUFFIXES if not any(name.endswith(suffix) for name in listed)
     ]
+    missing += [path for path in REQUIRED_FILES if path not in listed]
     return missing
 
 
@@ -43,7 +49,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     if missing:
         print(f"check_wheel: {args[0]} lacks: {', '.join(missing)}", file=sys.stderr)
         return 1
-    print(f"check_wheel: {args[0]} carries the fixtures, py.typed and the license files")
+    print(
+        f"check_wheel: {args[0]} carries the fixtures, py.typed, the skills and the license files"
+    )
     return 0
 
 

@@ -20,11 +20,14 @@ classifiers = [
 [project.optional-dependencies]
 dev = ["pytest>=8", "ruff>=0.6", "mypy>=1.11", "pip>=24"]
 
+[project.scripts]
+hpc-core = "hpc_core.cli:main"
+
 [tool.setuptools.packages.find]
 where = ["src"]
 
 [tool.setuptools.package-data]
-hpc_core = ["py.typed"]
+hpc_core = ["py.typed", "skills/**/*"]
 "hpc_core.testing" = ["fixtures/**/*"]
 
 [tool.ruff]

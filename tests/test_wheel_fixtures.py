@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import subprocess
 import sys
+import zipfile
 from pathlib import Path
 
 import pytest
@@ -38,10 +39,42 @@ def built_wheel(tmp_path_factory: pytest.TempPathFactory) -> Path:
 
 
 def test_wheel_carries_fixtures_py_typed_and_license_files(built_wheel: Path) -> None:
-    import zipfile
-
     with zipfile.ZipFile(built_wheel) as archive:
         assert missing_entries(archive.namelist()) == []
+
+
+def test_wheel_carries_both_skill_files(built_wheel: Path) -> None:
+    with zipfile.ZipFile(built_wheel) as archive:
+        names = set(archive.namelist())
+    assert "hpc_core/skills/hpc-scheduler-output/SKILL.md" in names
+    assert "hpc_core/skills/hpc-run-report/SKILL.md" in names
+
+
+def test_a_missing_skill_file_is_reported_by_path() -> None:
+    names = [
+        "hpc_core/skills/hpc-run-report/SKILL.md",
+        "hpc_core/testing/fixtures/scheduler/a.txt",
+        "hpc_core/testing/fixtures/reports/b.csv",
+        "hpc_core/py.typed",
+        "hpc_core-0.2.0.dist-info/licenses/LICENSE",
+        "hpc_core-0.2.0.dist-info/licenses/NOTICE",
+    ]
+    assert missing_entries(names) == ["hpc_core/skills/hpc-scheduler-output/SKILL.md"]
+
+
+def test_check_wheel_exits_1_when_a_skill_file_is_missing(
+    built_wheel: Path, tmp_path: Path
+) -> None:
+    from check_wheel import main
+
+    broken = tmp_path / "broken.whl"
+    with zipfile.ZipFile(built_wheel) as source, zipfile.ZipFile(broken, "w") as target:
+        for name in source.namelist():
+            if name != "hpc_core/skills/hpc-run-report/SKILL.md":
+                target.writestr(name, source.read(name))
+
+    assert main([str(built_wheel)]) == 0
+    assert main([str(broken)]) == 1
 
 
 def test_installed_loader_finds_every_fixture_the_repository_has(
