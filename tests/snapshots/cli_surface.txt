@@ -1,0 +1,43 @@
+hpc-core
+  --version
+hpc-core commands
+hpc-core commands capacity
+  --profile {capacity}
+hpc-core commands finished
+  --account ACCOUNT (required)
+  --hours HOURS (required)
+  --profile {console-monitor,operator-sampling}
+hpc-core commands job
+  JOB_ID
+  --profile {console-monitor,operator-sampling}
+hpc-core commands queue
+  --account ACCOUNT (required)
+  --profile {console-monitor,operator-sampling}
+hpc-core commands usage
+  JOB_ID
+  --profile {running-usage}
+hpc-core parse
+hpc-core parse sacct
+  --profile {console-monitor,operator-sampling}
+  [FILE]
+hpc-core parse sinfo
+  --profile {capacity}
+  [FILE]
+hpc-core parse squeue
+  --profile {console-monitor,operator-sampling}
+  [FILE]
+hpc-core parse sstat
+  --profile {running-usage}
+  [FILE]
+hpc-core report
+hpc-core report metrics
+  [FILE]
+hpc-core report schema
+hpc-core report validate
+  [FILE]
+hpc-core skills
+hpc-core skills install
+  DEST
+  --skill NAME
+  --force
+hpc-core skills list
