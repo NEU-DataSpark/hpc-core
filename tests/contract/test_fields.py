@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from hpc_core.contract.fields import Field, FieldProfile, ProfileError, iter_rows
+from hpc_core.contract.fields import UNIT_SEPARATOR, Field, FieldProfile, ProfileError, iter_rows
 from hpc_core.contract.squeue import OPERATOR_SAMPLING, parse_squeue
 
 NAME_LAST = FieldProfile(
@@ -69,3 +69,13 @@ def test_extra_cells_are_skipped_unless_the_last_field_is_free_text() -> None:
 def test_operator_profile_has_no_command_text_field() -> None:
     assert "command" not in OPERATOR_SAMPLING.names
     assert "command_text" not in OPERATOR_SAMPLING.names
+
+
+def test_unit_separator_is_a_valid_separator_but_space_and_newline_are_not() -> None:
+    profile = FieldProfile(
+        name="unit", command="squeue", fields=(Field("job_id", "%i"),), separator=UNIT_SEPARATOR
+    )
+    assert profile.separator == UNIT_SEPARATOR
+    for bad in (" ", "\t", "\n"):
+        with pytest.raises(ProfileError, match="one plain character"):
+            FieldProfile(name="x", command="squeue", fields=(Field("job_id", "%i"),), separator=bad)

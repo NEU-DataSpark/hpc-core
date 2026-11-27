@@ -7,13 +7,16 @@ last field, so a separator inside it cannot shift the others.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Generic, TypeVar
 
 from .states import StateClass
 
 SUPPORTED_COMMANDS: frozenset[str] = frozenset({"squeue", "sacct", "sinfo", "sstat"})
+# The ASCII unit separator. Slurm prints no such character in a field, so a profile may use it as
+# its separator. It is the only whitespace-like character a separator may be.
+UNIT_SEPARATOR = "\x1f"
 
 
 class ProfileError(ValueError):
@@ -33,11 +36,14 @@ class FieldProfile:
     command: str
     fields: tuple[Field, ...]
     separator: str = "|"
+    # Opt-in: the profile also reads pending array ranges and heterogeneous ids (see identifiers).
+    extended_job_ids: bool = False
 
     def __post_init__(self) -> None:
         if self.command not in SUPPORTED_COMMANDS:
             raise ProfileError(f"profile '{self.name}': unsupported command '{self.command}'")
-        if len(self.separator) != 1 or self.separator.isspace() or self.separator in ",%":
+        separator_is_space = self.separator.isspace() and self.separator != UNIT_SEPARATOR
+        if len(self.separator) != 1 or separator_is_space or self.separator in ",%":
             raise ProfileError(f"profile '{self.name}': separator must be one plain character")
         if not self.fields:
             raise ProfileError(f"profile '{self.name}': no fields")
@@ -81,12 +87,17 @@ def iter_rows(text: str, profile: FieldProfile) -> tuple[list[dict[str, str]], i
 
     Blank lines are not rows and are not counted. A row with too few cells is skipped; so is a row
     with extra cells unless the last field is free text, which keeps any extra separators.
+
+    A profile whose separator is the unit separator takes rows split on ``\\n`` only. Its free-text
+    field may hold any character (a command can hold ``\\x0b`` or ``\\u2028``), and ``splitlines``
+    would end a row there. Every other profile keeps ``splitlines``, so its output is unchanged.
     """
     width = len(profile.fields)
     last = profile.fields[-1]
     good: list[dict[str, str]] = []
     skipped = 0
-    for raw_line in text.splitlines():
+    lines = text.split("\n") if profile.separator == UNIT_SEPARATOR else text.splitlines()
+    for raw_line in lines:
         line = raw_line.rstrip("\r")
         if not line.strip():
             continue
@@ -131,6 +142,11 @@ class JobRecord:
     total_cpu_seconds: float | None = None
     max_rss_mib: float | None = None
     time_limit_seconds: float | None = None
+    # Added in 0.2.0. Keyword-only and unset unless a profile names them; see the serializer in
+    # hpc_core.testing.fixtures, which leaves them out of a record when unset.
+    node_count: int | None = field(default=None, kw_only=True)
+    dependency_text: str | None = field(default=None, kw_only=True)
+    command: str | None = field(default=None, kw_only=True)
 
 
 @dataclass(frozen=True)

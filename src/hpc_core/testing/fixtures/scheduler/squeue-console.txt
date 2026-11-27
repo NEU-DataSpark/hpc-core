@@ -1,0 +1,8 @@
+# recorded: none (synthetic example in the recording format; not taken from a cluster)
+# synthetic: not recorded from a cluster
+# slurm: not recorded
+# command: squeue -o '%i\x1f%j\x1f%P\x1f%T\x1f%V\x1f%S\x1f%e\x1f%C\x1f%D\x1f%b\x1f%l\x1f%r\x1f%E\x1f%o'
+100001sample-trainshortRUNNING2026-01-05T01:00:002026-01-05T01:05:002026-01-05T05:05:0041gpu:a30:24:00:00None(null)/home/exampleuser/run.sh
+100002_[1-10]sample|sweepgpuPENDING2026-01-05T01:10:00N/AN/A21gpu:a30:1UNLIMITEDDependencyafterok:100001(unfulfilled)python sweep.py --name a|b
+100003_[1-10%2]sample-arrayshortPENDING2026-01-05T01:20:00N/AN/A11(null)00:30:00Priorityafterok:100001(unfulfilled),afterany:100002(unfulfilled)/home/exampleuser/array.sh
+100004sample-doneshortCOMPLETED2026-01-05T00:00:002026-01-05T00:01:002026-01-05T00:30:0082(null)1-00:00:00None(null)/home/exampleuser/post.sh

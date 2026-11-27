@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import pytest
 
-from hpc_core.contract.fields import FieldProfile, JobRecord
+from hpc_core.contract.fields import FieldProfile
 from hpc_core.contract.sacct import CONSOLE_MONITOR, parse_sacct
 from hpc_core.contract.sacct import OPERATOR_SAMPLING as SACCT_OPERATOR
 from hpc_core.contract.squeue import OPERATOR_SAMPLING as SQUEUE_OPERATOR
@@ -113,7 +113,29 @@ def test_operator_profile_requests_no_command_text() -> None:
     assert isinstance(SQUEUE_OPERATOR, FieldProfile)
     assert not {"command", "command_text", "job_command"} & set(SQUEUE_OPERATOR.names)
     assert not {"command", "command_text", "job_command"} & set(SACCT_OPERATOR.names)
-    assert "command" not in {field for field in JobRecord.__dataclass_fields__}
+    # The record has a command field for the console profile, but the operator profile never
+    # requests it, so every record it reads leaves it unset.
+    records = parse_squeue(load_case("scheduler", "squeue-operator").text, SQUEUE_OPERATOR).records
+    assert records and all(record.command is None for record in records)
+
+
+def test_console_fields_are_unset_for_operator_sampling() -> None:
+    squeue_records = parse_squeue(
+        load_case("scheduler", "squeue-operator").text, SQUEUE_OPERATOR
+    ).records
+    sacct_text = load_case("scheduler", "sacct-operator").text
+    sacct_records = parse_sacct(sacct_text, SACCT_OPERATOR).records
+    assert squeue_records and sacct_records
+
+    for record in squeue_records:
+        assert record.end_time is None
+        assert record.node_count is None
+        assert record.dependency_text is None
+        assert record.command is None
+    for record in sacct_records:
+        assert record.node_count is None
+        assert record.dependency_text is None
+        assert record.command is None
 
 
 def test_parsing_touches_no_file_process_or_network(monkeypatch: pytest.MonkeyPatch) -> None:
