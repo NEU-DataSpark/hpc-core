@@ -1,0 +1,3 @@
+# recorded: none (synthetic example in the recording format; not taken from a cluster)
+# slurm: not recorded
+# command: sstat -a -P -n -o JobID,AveCPU,NTasks,MaxRSS

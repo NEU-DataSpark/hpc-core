@@ -1,0 +1,31 @@
+{
+  "command": "sinfo",
+  "profile": "capacity",
+  "records": [
+    {
+      "partition": "short",
+      "gres": "gpu:a100:4",
+      "state": "mix",
+      "node_count": 3,
+      "gpus_per_node": 4,
+      "gpu_type": "a100"
+    },
+    {
+      "partition": "gpu",
+      "gres": "(null)",
+      "state": "idle",
+      "node_count": 5,
+      "gpus_per_node": null,
+      "gpu_type": null
+    },
+    {
+      "partition": "long",
+      "gres": "gpu:h200:2",
+      "state": "down*",
+      "node_count": 1,
+      "gpus_per_node": 2,
+      "gpu_type": "h200"
+    }
+  ],
+  "skipped": 0
+}

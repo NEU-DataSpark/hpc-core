@@ -1,0 +1,6 @@
+# recorded: none (synthetic example in the recording format; not taken from a cluster)
+# slurm: not recorded
+# command: sinfo -o '%P|%G|%t|%D'
+short|gpu:a100:4|mix|3
+gpu|(null)|idle|5
+long|gpu:h200:2|down*|1

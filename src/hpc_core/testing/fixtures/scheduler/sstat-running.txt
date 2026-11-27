@@ -1,0 +1,7 @@
+# recorded: none (synthetic example in the recording format; not taken from a cluster)
+# slurm: not recorded
+# command: sstat -a -P -n -o JobID,AveCPU,NTasks,MaxRSS
+100001.0|00:10:00|4|2048K
+100001.batch|00:00:05|1|512M
+100001.extern|00:00:00|1|
+100001_3.0|00:00:20|2|

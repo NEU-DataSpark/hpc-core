@@ -1,0 +1,7 @@
+# recorded: none (synthetic example in the recording format; not taken from a cluster)
+# slurm: not recorded
+# command: sacct -P -X --format=JobID,Partition,State,Submit,Start,End,ReqCPUS,ReqTRES,Timelimit,JobName
+100001|short|COMPLETED|2026-01-05T00:00:00|2026-01-05T00:02:00|2026-01-05T01:02:00|8|cpu=8,mem=32G,gres/gpu:a100=2|1-00:00:00|sample-job
+100002|short|CANCELLED by 1234|2026-01-05T00:30:00|Unknown|2026-01-05T00:31:00|0|cpu=0|UNLIMITED|sample-cancel
+100003_3|gpu|COMPLETED|2026-01-05T00:10:00|2026-01-05T00:12:00|2026-01-05T00:40:00|4|cpu=4,gres/gpu=1|02:00:00|sample-step
+100004|gpu|FAILED|2026-01-05T00:20:00|2026-01-05T00:21:00|2026-01-05T00:25:00|2|cpu=2|00:30:00|sample|pipe|name
