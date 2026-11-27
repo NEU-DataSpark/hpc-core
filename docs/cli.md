@@ -103,7 +103,7 @@ hpc-core skills list
 
 Coordinates a team folder shared by several nodes: each node's liveness, profile limits shared
 through slot leases, and messages between nodes. The folder protocol, the liveness rules and the
-self-check codes are in [`cluster-coordination.md`](cluster-coordination.md). Every subcommand takes
+self-check codes are in [`cluster-coordination.md`](cluster-coordination.md). Every subcommand except `profiles` takes
 `--root`, the team folder, and `--verbose` to write the coordination events to standard error.
 
 | Command | Options |
@@ -117,6 +117,7 @@ self-check codes are in [`cluster-coordination.md`](cluster-coordination.md). Ev
 | `cluster ack` | `--root`, `--node-id`, `MESSAGE_ID` |
 | `cluster limits` | `--root`, `--profile`; with `--set N`, `--share-queue` or `--reset-node` also `--node-id`; `--show-node` needs `--node-id` |
 | `cluster check` | `--root`, `--read-only` |
+| `cluster profiles` | `--file` (a JSON profile set, or `-` for standard input); opens no team folder |
 
 Every command writes its result as JSON to standard output. `check` prints one entry per finding,
 with its code, status and hint.
@@ -126,7 +127,7 @@ with its code, status and hint.
 | Status | Meaning |
 | --- | --- |
 | 0 | Success. |
-| 1 | The input was read but is not acceptable: an unsupported `schema_version`, a report with skipped rows, or a skill folder that already exists. For `cluster`: the team folder is missing or not set up, a live node already holds the id, a recipient has no record, a self-check finding is not `ok`, or a share-queue value (`--share-queue`) that is malformed, outside 0 to 1024, or above the account quota. |
+| 1 | The input was read but is not acceptable: an unsupported `schema_version`, a report with skipped rows, or a skill folder that already exists. For `cluster`: the team folder is missing or not set up, a live node already holds the id, a recipient has no record, a self-check finding is not `ok`, or a share-queue value (`--share-queue`) that is malformed, outside 0 to 1024, or above the account quota, or a profile set (`cluster profiles`) that is refused. |
 | 2 | A usage or argument error: a bad option, an invalid account or job id, an unknown profile or skill, an input file that cannot be read, or for `cluster` an invalid node, profile or message id, a limit out of range, or an interval under 30 seconds. |
 
 `parse` exits 0 when rows are skipped; its `skipped` count is the record of that. `report` exits 1

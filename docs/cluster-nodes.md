@@ -80,3 +80,47 @@ rm -rf "$TEAM"
 
 A node that pins a value higher than the account quota is refused, and a lowered account quota does
 not release a slot that is already held.
+
+## Profile sets: one node or several from one file
+
+A profile set describes the node profiles one program acts for. It is a JSON document with an
+optional `mode` and a list `profiles`. Each entry stands for one node of the team. The examples use
+placeholders only.
+
+```json
+{
+  "mode": "multi",
+  "profiles": [
+    {"profile_id": "alice", "node_id": "alice-console-a1", "share_queue": "h200=1", "concurrency_limit": 2},
+    {"profile_id": "alice", "node_id": "alice-console-a2", "share_queue": "h200=1"},
+    {"profile_id": "bob", "node_id": "bob-console-b1", "enabled": false}
+  ]
+}
+```
+
+- **Modes.** `single` is the default and holds exactly one entry; it is the same node a configuration
+  without a set gives. `multi` holds from 1 to 16 entries, and each *enabled* entry is one node. The
+  mode is case-insensitive; any other value is refused.
+- **Fields.** `profile_id` is required. `node_id`, `display_name`, `share_queue` (the same
+  `type=number` pairs as `--share-queue`), `concurrency_limit` (1 to 1024) and `enabled` are optional.
+  An entry with any other field is refused, so a key path, a host name or a secret cannot be stored
+  by accident.
+- **`enabled`.** It defaults to `true`. A disabled entry keeps its quota and limit but produces no
+  node. A `multi` set needs at least one enabled entry. A `single` set ignores `enabled`, because its
+  one entry is always the node.
+- **Node ids.** Give each entry a `node_id` to keep the same node record across runs. An entry without
+  one gets a generated id of the form `<profile>-console-<8 hex digits>`, which changes each time the
+  file is read.
+- **Rules across entries.** Node ids are unique within the set, including disabled entries. Entries
+  may share a `profile_id` (several nodes of one person), but they must agree on `concurrency_limit`
+  because the profile has one limit. Each node keeps its own `share_queue`.
+
+Check a file without touching a team folder:
+
+```sh
+hpc-core cluster profiles --file profiles.json
+```
+
+The output holds `mode` and `profiles`, one object per entry with its `node_id` and, for a
+`single` set, `enabled` set to `true`. A refused file prints nothing on standard output, names the
+problem on standard error and exits with status 1.

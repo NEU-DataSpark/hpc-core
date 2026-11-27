@@ -3,7 +3,7 @@ name: hpc-scheduler-output
 description: Build read-only Slurm queue, accounting, partition capacity and job step queries with the hpc-core command line, run them on your own login-node connection, and turn their text into JSON records. Use when an agent needs squeue, sacct, sinfo or sstat results from a cluster without writing its own Slurm parsing.
 license: Apache-2.0
 metadata:
-  version: "0.3.0"
+  version: "0.4.0"
 ---
 
 # HPC scheduler output

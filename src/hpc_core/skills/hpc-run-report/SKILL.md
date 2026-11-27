@@ -3,7 +3,7 @@ name: hpc-run-report
 description: Check a run-report CSV with the hpc-core command line, print the metrics of each row, and print the supported schema. Use when an agent must confirm that a run report is readable, read its skipped rows and unavailable metrics, or compute CPU and GPU hours from it.
 license: Apache-2.0
 metadata:
-  version: "0.3.0"
+  version: "0.4.0"
 ---
 
 # Run report checks
