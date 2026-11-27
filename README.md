@@ -31,3 +31,7 @@ Consumers keep their own transport implementation: the operator skill uses the `
 
 No package code exists yet. Build and test commands will be added here with the first package.
 
+
+## License
+
+MIT. See [LICENSE](LICENSE).
