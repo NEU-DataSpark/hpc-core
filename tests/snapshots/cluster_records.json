@@ -1,0 +1,48 @@
+{
+  "schema_version": 1,
+  "records": {
+    "manifest": [
+      "schema_version",
+      "team_label"
+    ],
+    "node": [
+      "schema_version",
+      "node_id",
+      "profile_id",
+      "kind",
+      "display_name",
+      "machine",
+      "software_version",
+      "started_at",
+      "interval_seconds",
+      "heartbeat_count",
+      "instance_token"
+    ],
+    "profile": [
+      "schema_version",
+      "profile_id",
+      "concurrency_limit",
+      "updated_by",
+      "updated_at"
+    ],
+    "lease": [
+      "schema_version",
+      "profile_id",
+      "slot",
+      "node_id",
+      "acquired_at",
+      "interval_seconds"
+    ],
+    "message": [
+      "schema_version",
+      "message_id",
+      "type",
+      "from_node",
+      "to_node",
+      "created_at",
+      "expires_at",
+      "in_reply_to",
+      "body"
+    ]
+  }
+}

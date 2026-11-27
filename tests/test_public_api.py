@@ -1,9 +1,11 @@
-"""The public API is the names exported by contract, transport and slurm; a change here is a
-versioning event (see docs/versioning.md)."""
+"""The public API is the names exported by contract, coordination, transport and slurm.
+
+A change here is a versioning event (see docs/versioning.md)."""
 
 from __future__ import annotations
 
 import hpc_core.contract
+import hpc_core.coordination
 import hpc_core.slurm
 import hpc_core.transport
 
@@ -49,6 +51,80 @@ EXPECTED_CONTRACT = {
     "wait_seconds",
 }
 EXPECTED_TRANSPORT = {"CommandResult", "CommandTransport", "TransportError", "TransportTimeout"}
+EXPECTED_COORDINATION = {
+    "AckResult",
+    "BeatResult",
+    "CheckResult",
+    "ClusterManifest",
+    "CommandFolderStore",
+    "Discovery",
+    "EVENTS",
+    "Exists",
+    "FileEntry",
+    "FolderStore",
+    "GRANTED",
+    "KINDS",
+    "LIMIT_MAX",
+    "LIMIT_MIN",
+    "LOGGER_NAME",
+    "LeaseHandle",
+    "LeaseRecord",
+    "Listing",
+    "LocalFolderStore",
+    "MAX_PENDING_MESSAGES",
+    "MESSAGE_LIMIT",
+    "MESSAGE_TTL_SECONDS",
+    "MessageRecord",
+    "NODE_RECORD_LIMIT",
+    "NO_SLOT",
+    "NodeIdentity",
+    "NodeRecord",
+    "NodeSession",
+    "NodeView",
+    "NotFound",
+    "OFFLINE",
+    "ONLINE",
+    "PendingList",
+    "ProfileRecord",
+    "ProfileUsage",
+    "PruneResult",
+    "RESERVED_TYPES",
+    "SCHEMA_VERSION",
+    "STALE",
+    "SUBFOLDERS",
+    "SUPPORTED_VERSIONS",
+    "SendRefused",
+    "SlotResult",
+    "StoreError",
+    "Unreadable",
+    "UnsafeField",
+    "acknowledge",
+    "acquire",
+    "answer_ping",
+    "classify",
+    "cleanup",
+    "decode_lease",
+    "decode_manifest",
+    "decode_message",
+    "decode_node",
+    "decode_profile",
+    "delivery_state",
+    "discover",
+    "encode",
+    "ensure_profile",
+    "event_fields",
+    "init_layout",
+    "pending",
+    "prune",
+    "read_profile",
+    "release",
+    "renew",
+    "run_check",
+    "send",
+    "set_limit",
+    "usage",
+    "validate_id",
+}
 EXPECTED_SLURM = {
     "READ_ONLY_PROGRAMS",
     "SlurmAdapter",
@@ -70,3 +146,7 @@ def test_transport_public_names() -> None:
 
 def test_slurm_public_names() -> None:
     assert set(hpc_core.slurm.__all__) == EXPECTED_SLURM
+
+
+def test_coordination_public_names() -> None:
+    assert set(hpc_core.coordination.__all__) == EXPECTED_COORDINATION

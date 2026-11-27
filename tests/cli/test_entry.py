@@ -76,9 +76,9 @@ def test_python_m_runs_the_same_parser() -> None:
     assert "--profile" in result.stdout
 
 
-def test_build_parser_has_the_four_groups() -> None:
+def test_build_parser_has_the_five_groups() -> None:
     parser = build_parser()
     (groups,) = [
         action for action in parser._actions if isinstance(action, argparse._SubParsersAction)
     ]
-    assert set(groups.choices) == {"parse", "report", "commands", "skills"}
+    assert set(groups.choices) == {"parse", "report", "commands", "skills", "cluster"}

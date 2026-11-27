@@ -8,22 +8,34 @@ from .contract import (
     JobReader,
     canonical_samples,
     check_reader,
+    check_store_conformance,
     check_writer,
     package_reader,
     package_writer,
+    run_store_script,
 )
-from .fake_transport import FakeTransport
+from .fake_transport import FakeTransport, SimulatedFolderTransport
+from .fault_store import FaultyFolderStore
 from .fixtures import load_case, load_cases
+from .memory_store import ManualClock, MemoryFolderStore
+from .subprocess_transport import SubprocessTransport
 
 __all__ = [
     "ContractFailure",
     "FakeTransport",
+    "FaultyFolderStore",
     "JobReader",
+    "ManualClock",
+    "MemoryFolderStore",
+    "SimulatedFolderTransport",
+    "SubprocessTransport",
     "canonical_samples",
     "check_reader",
+    "check_store_conformance",
     "check_writer",
     "load_case",
     "load_cases",
     "package_reader",
     "package_writer",
+    "run_store_script",
 ]

@@ -22,6 +22,7 @@ from collections.abc import Callable, Iterable, Sequence
 from itertools import zip_longest
 
 from ..contract.report import COLUMNS, ReportRow, format_report, format_row, read_report
+from ..coordination.store import Exists, FolderStore, NotFound, StoreError
 from .fixtures import Case, load_case, load_cases
 
 CANONICAL_CASE = "finished_run"
@@ -137,3 +138,65 @@ def check_writer(writer: Writer, samples: Sequence[ReportRow] | None = None) -> 
         raise ContractFailure(
             f"{CANONICAL_CASE}: writer output differs from the golden file{where}"
         )
+
+
+# -- folder store conformance ------------------------------------------------------------------
+
+_STORE_ROOT = "_cluster/nodes"
+
+
+def run_store_script(store: FolderStore) -> list[object]:
+    """Run the fixed store script and return one ``(step, result)`` pair per step.
+
+    File times and clocks are left out, because they differ between stores; names, texts and the
+    outcomes ``not-found``, ``exists`` and ``store-error`` must match on every store.
+    """
+    results: list[object] = []
+
+    def attempt(label: str, action: Callable[[], object]) -> None:
+        try:
+            results.append((label, action()))
+        except NotFound:
+            results.append((label, "not-found"))
+        except Exists:
+            results.append((label, "exists"))
+        except StoreError:
+            results.append((label, "store-error"))
+
+    folder = _STORE_ROOT
+    attempt("mkdir", lambda: store.make_dirs(folder))
+    attempt("write-a", lambda: store.write_text(f"{folder}/a.json", "A\n"))
+    attempt("read-a", lambda: store.read_text(f"{folder}/a.json"))
+    attempt("read-missing", lambda: store.read_text(f"{folder}/missing.json"))
+    attempt("create-a-again", lambda: store.create_exclusive(f"{folder}/a.json", "X\n"))
+    attempt("create-b", lambda: store.create_exclusive(f"{folder}/b.json", "B\n"))
+    attempt("list", lambda: [e.name for e in store.list_dir(folder).entries])
+    attempt("read-all", lambda: store.read_all(folder))
+    attempt(
+        "move-no-replace",
+        lambda: store.move(f"{folder}/b.json", f"{folder}/a.json", replace=False),
+    )
+    attempt("move", lambda: store.move(f"{folder}/b.json", f"{folder}/c.json"))
+    attempt("list-after-move", lambda: [e.name for e in store.list_dir(folder).entries])
+    attempt("remove-c", lambda: store.remove(f"{folder}/c.json"))
+    attempt("remove-c-again", lambda: store.remove(f"{folder}/c.json"))
+    attempt("list-missing", lambda: store.list_dir("_cluster/absent"))
+    attempt("subdirs", lambda: list(store.list_subdirs("_cluster")))
+    attempt("remove-tree", lambda: store.remove_tree(folder))
+    attempt("list-after-tree", lambda: store.list_dir(folder))
+    return results
+
+
+def check_store_conformance(store: FolderStore) -> None:
+    """Raise ContractFailure unless ``store`` gives the reference results of the store script.
+
+    The reference is a fresh in-memory folder store. A consumer runs this against its own store
+    (a mounted folder, a remote command store) to see that it keeps the protocol's rules.
+    """
+    from .memory_store import MemoryFolderStore
+
+    expected = run_store_script(MemoryFolderStore())
+    actual = run_store_script(store)
+    for number, (want, got) in enumerate(zip_longest(expected, actual), 1):
+        if want != got:
+            raise ContractFailure(f"store step {number} differs: expected {want!r}, got {got!r}")

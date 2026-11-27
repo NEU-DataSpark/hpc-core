@@ -1,4 +1,5 @@
-"""Layer direction guard: contract <- transport <- slurm, cli on top, testing may use all of them.
+"""Layer direction guard: contract <- transport <- slurm and coordination, cli on top, testing may
+use all of them but cli.
 
 Absolute and relative imports both count: the package uses relative imports, so a relative import
 of a higher layer is resolved to its absolute module name before the rule is applied.
@@ -19,8 +20,9 @@ ALLOWED: dict[str, frozenset[str]] = {
     "contract": frozenset(),
     "transport": frozenset({"contract"}),
     "slurm": frozenset({"contract", "transport"}),
-    "cli": frozenset({"contract", "transport", "slurm"}),
-    "testing": frozenset({"contract", "transport", "slurm"}),
+    "coordination": frozenset({"contract", "transport"}),
+    "cli": frozenset({"contract", "transport", "slurm", "coordination"}),
+    "testing": frozenset({"contract", "transport", "slurm", "coordination"}),
 }
 
 
@@ -131,3 +133,26 @@ def test_the_cli_may_import_the_lower_layers() -> None:
     )
     problems = _with_planted("cli/_planted_ok.py", source)
     assert problems == []
+
+
+def test_coordination_imports_only_contract_and_transport() -> None:
+    problems = _with_planted("coordination/_planted_slurm.py", "from ..slurm import commands\n")
+    assert any("coordination/_planted_slurm.py" in problem for problem in problems)
+
+
+def test_nothing_but_cli_and_testing_may_import_coordination() -> None:
+    for layer in ("contract", "transport", "slurm"):
+        problems = _with_planted(
+            f"{layer}/_planted_coordination.py", "from ..coordination import store\n"
+        )
+        assert any(f"{layer}/_planted_coordination.py" in problem for problem in problems)
+
+
+def test_cli_and_testing_may_import_coordination() -> None:
+    assert (
+        _with_planted("cli/_planted_coordination_ok.py", "from ..coordination import store\n") == []
+    )
+    assert (
+        _with_planted("testing/_planted_coordination_ok.py", "from ..coordination import store\n")
+        == []
+    )

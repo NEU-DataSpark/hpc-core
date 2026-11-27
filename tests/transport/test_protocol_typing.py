@@ -14,7 +14,14 @@ GOOD = """
 from hpc_core.transport.protocol import CommandResult, CommandTransport
 
 class Good:
-    def run(self, argv: tuple[str, ...], *, timeout: float, max_output_bytes: int) -> CommandResult:
+    def run(
+        self,
+        argv: tuple[str, ...],
+        *,
+        timeout: float,
+        max_output_bytes: int,
+        input: str | None = None,
+    ) -> CommandResult:
         return CommandResult(stdout="", stderr="", exit_status=0)
 
 transport: CommandTransport = Good()

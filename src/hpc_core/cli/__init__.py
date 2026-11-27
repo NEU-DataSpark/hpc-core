@@ -13,7 +13,7 @@ from collections.abc import Sequence
 
 from ..contract.identifiers import ValidationError
 from ..contract.report import ReportError
-from . import cmd_commands, cmd_parse, cmd_report, cmd_skills
+from . import cmd_cluster, cmd_commands, cmd_parse, cmd_report, cmd_skills
 from ._io import EXIT_UNACCEPTABLE, EXIT_USAGE, InputError, fail
 from ._version import package_version
 
@@ -34,6 +34,7 @@ def build_parser() -> argparse.ArgumentParser:
     cmd_report.register(subparsers)
     cmd_commands.register(subparsers)
     cmd_skills.register(subparsers)
+    cmd_cluster.register(subparsers)
     _no_abbreviations(parser)
     return parser
 

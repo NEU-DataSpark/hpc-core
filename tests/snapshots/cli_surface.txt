@@ -1,5 +1,53 @@
 hpc-core
   --version
+hpc-core cluster
+hpc-core cluster ack
+  --root ROOT (required)
+  --verbose
+  --node-id NODE_ID (required)
+  MESSAGE_ID
+hpc-core cluster beat
+  --root ROOT (required)
+  --verbose
+  --node-id NODE_ID (required)
+  --profile PROFILE (required)
+  --kind {console,skill,cli} (required)
+  --interval-seconds INTERVAL_SECONDS
+  --machine MACHINE
+hpc-core cluster check
+  --root ROOT (required)
+  --verbose
+  --read-only
+hpc-core cluster inbox
+  --root ROOT (required)
+  --verbose
+  --node-id NODE_ID (required)
+hpc-core cluster init
+  --root ROOT (required)
+  --verbose
+hpc-core cluster leave
+  --root ROOT (required)
+  --verbose
+  --node-id NODE_ID (required)
+  --profile PROFILE (required)
+  --kind {console,skill,cli} (required)
+hpc-core cluster limits
+  --root ROOT (required)
+  --verbose
+  --profile PROFILE (required)
+  --node-id NODE_ID
+  --set LIMIT
+hpc-core cluster nodes
+  --root ROOT (required)
+  --verbose
+hpc-core cluster send
+  --root ROOT (required)
+  --verbose
+  --node-id NODE_ID (required)
+  --to TO (required)
+  --type TYPE (required)
+  --body-file BODY_FILE
+  --reply-to REPLY_TO
 hpc-core commands
 hpc-core commands capacity
   --profile {capacity}
