@@ -28,7 +28,7 @@ The package uses semantic versioning, `MAJOR.MINOR.PATCH`.
 
 ## Version notes
 
-- **0.4.0** (minor, additive). Adds the profile set model (`ProfileEntry`, `ProfileSet`, `parse_profile_set`, `identities_for` and the mode names in `hpc_core.coordination`) and the `cluster profiles` command. Nothing is removed or renamed, and the record `schema_version` is unchanged. `pyproject.toml` and the skills' `metadata.version` are set to 0.4.0 with this change.
+- **0.5.0** (minor, additive). Adds the profile set model (`ProfileEntry`, `ProfileSet`, `parse_profile_set`, `identities_for` and the mode names in `hpc_core.coordination`) and the `cluster profiles` command. Nothing is removed or renamed, and the record `schema_version` is unchanged. `pyproject.toml` and the skills' `metadata.version` are set to 0.5.0 with this change. Version 0.4.0 is the release of per-accelerator node quotas.
 - **Unreleased, planned for 0.3.0** (minor, additive). Adds the `hpc-core` command and
   `python -m hpc_core`, with the `parse`, `report`, `commands`, `skills` and `cluster` groups, and
   the two skills `hpc-scheduler-output` and `hpc-run-report` in the package and the wheel. The

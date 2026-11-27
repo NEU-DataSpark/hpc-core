@@ -1,6 +1,6 @@
 """Check that a built wheel carries what the consumer contract, the CLI and the license need.
 
-    python tools/check_wheel.py dist/hpc_core-0.4.0-py3-none-any.whl
+    python tools/check_wheel.py dist/hpc_core-0.5.0-py3-none-any.whl
 
 Exits 0 when every required file is in the wheel, 1 when one is missing, and 2 for bad arguments.
 """
