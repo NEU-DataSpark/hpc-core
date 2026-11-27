@@ -30,6 +30,12 @@ Once a release has been published to PyPI, install a pinned version:
 python -m pip install "hpc-core==X.Y.Z"
 ```
 
+To opt into the latest available development build from `main`:
+
+```bash
+python -m pip install --pre --upgrade hpc-core
+```
+
 Alternatively, install a tagged release directly from Git:
 
 ```bash
