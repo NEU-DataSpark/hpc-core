@@ -31,7 +31,6 @@ Consumers keep their own transport implementation: the operator skill uses the `
 
 No package code exists yet. Build and test commands will be added here with the first package.
 
-
 ## License
 
-MIT. See [LICENSE](LICENSE).
+Apache License 2.0. See [LICENSE](LICENSE) and [NOTICE](NOTICE).
