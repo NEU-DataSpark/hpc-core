@@ -18,15 +18,27 @@ The package uses semantic versioning, `MAJOR.MINOR.PATCH`.
 
 ## Releasing
 
-1. Change `version` in `pyproject.toml` and add the change to the release notes.
-2. Merge to `main` once CI is green.
-3. Tag the commit `vX.Y.Z`. The release workflow fails if the tag and the version differ, builds the
-   sdist and wheel, checks them, and attaches them to the run.
+The release draft workflow runs on pushes to `main` and can also be started manually on `main`.
+Hagicode's release drafter generates notes from commits and suggests a version; it does not publish
+the release or create a tag.
 
-Creating the first tag is a separate step, not part of the package change.
+1. Review the draft and set `version` in `pyproject.toml` to the draft version. Merge the version
+   change to `main` once CI is green, then review the updated draft and its target commit. If the
+   suggested version changed, update the project version again before tagging.
+2. Push a `vX.Y.Z` tag pointing to that commit. The release workflow fails if the tag and project
+   version differ. It builds and checks the sdist and wheel, stores them as a workflow artifact, and
+   publishes them to PyPI with Trusted Publishing.
+3. Check that the release workflow succeeded, then publish the GitHub draft manually. Use the
+   already-pushed tag when publishing it.
+
+Before the first release, register a PyPI pending trusted publisher for project `hpc-core`, owner
+`NEU-DataSpark`, repository `hpc-core`, workflow `release.yml`, and environment `pypi`. If the
+project already exists, add the same trusted publisher in its PyPI settings instead. Configure the
+GitHub `pypi` environment's protection rules as needed. A pending publisher does not reserve the
+project name until the first upload.
 
 ## Consumers
 
-Consumers install a tag, for example `hpc-core @ git+https://github.com/NEU-DataSpark/hpc-core.git@vX.Y.Z`.
-They move to a new version by changing that tag, and run the contract test in
+Once published, consumers can pin a PyPI release, for example `hpc-core==X.Y.Z`, or continue to
+install a Git tag. They move to a new version by changing that pin, and run the contract test in
 [`consumer-contract-test.md`](consumer-contract-test.md) before they do.

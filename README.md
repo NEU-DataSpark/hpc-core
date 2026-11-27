@@ -24,13 +24,19 @@ the HPC Console uses `paramiko`. This package contains neither.
 
 ## Install
 
-Pin a release tag. Replace `X.Y.Z` with a tag that exists in the repository:
+Once a release has been published to PyPI, install a pinned version:
+
+```bash
+python -m pip install "hpc-core==X.Y.Z"
+```
+
+Alternatively, install a tagged release directly from Git:
 
 ```bash
 python -m pip install "hpc-core @ git+https://github.com/NEU-DataSpark/hpc-core.git@vX.Y.Z"
 ```
 
-No package index publication is used.
+See [`docs/versioning.md`](docs/versioning.md) for the release process.
 
 ## Development
 
