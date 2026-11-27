@@ -11,7 +11,7 @@ import pytest
 from hpc_core.cli import build_parser
 
 DOCS = Path(__file__).resolve().parent.parent / "docs"
-DOCUMENTED = ("cluster-coordination.md", "cli.md")
+DOCUMENTED = ("cluster-coordination.md", "cli.md", "cluster-nodes.md")
 _CODE_SPAN = re.compile(r"`(hpc-core cluster [^`]+)`")
 
 

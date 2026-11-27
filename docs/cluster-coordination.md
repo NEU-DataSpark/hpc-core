@@ -88,6 +88,67 @@ If more leases than the limit are valid, for example after the limit was lowered
 was taken last (by acquisition time, then node id) releases itself. Holders already in place are
 not removed, and nothing new is granted until the count is below the limit.
 
+## Explicit node profiles
+
+A profile can also carry a share-queue limit per accelerator type (for example `h200`). Two values
+work together:
+
+- The **account quota** is the per-type limit in the profile record (`share_queue_limits`). Each
+  type is 0 to 1024, a profile holds at most 16 types, and a type the record does not list counts
+  as 0. A type name is 1 to 32 lower-case letters, digits or hyphens that start with a letter or
+  digit; an upper-case name is folded to lower case.
+- The **node quota** is an explicit value that one node pins for itself. It is written only in that
+  node's own record, so one node never writes another node's limits.
+
+The node's **effective limit** for each type is the smaller of its node quota and the current
+account quota. A type the node does not list takes the account value. A node quota can never be
+above the account quota: a pin that is refused names the type, the requested value and the account
+quota, and writes nothing. Lowering the account quota later does not remove the node's explicit
+value; the effective limit follows the account, and the explicit value applies again when the
+account is raised.
+
+A node has one of two sources. `explicit` means it pinned values; `default` means it uses the
+account quota alone, which is also what a node with no share-queue fields in its record gets. A
+node keeps its explicit values across ordinary beats (the values stay in its own record), and
+`--reset-node` removes them so the node follows the account again. A reset of a node with no
+explicit values changes nothing.
+
+### Typed and untyped slots are counted apart
+
+A lease with no type counts only against the profile's concurrency limit, exactly as before. A
+lease with a type counts only against that type:
+
+- the profile's valid leases of the type are checked against the account quota of the type;
+- the node's own valid leases of the type are checked against the node's effective limit.
+
+The node limit is checked first, so a node with a limit of 0 is refused with `node_limit` even when
+the account has room. A refusal with `account_limit` means the account is full for that type. A
+refused typed request creates no file. A type the account does not list has an account limit of 0.
+
+Typed and untyped leases share one slot-number sequence per profile. After a typed slot is taken,
+the same over-limit repair runs for that type only: when there are more valid leases of the type
+than the account quota, the lease taken last releases itself. Lowering a quota never releases a
+lease that is already held; it only stops new ones of that type until the holders are below the
+limit.
+
+`cluster limits` shows the per-type usage: the account quota, the valid and stale leases, and each
+node's held count and effective limit. `cluster check` warns when typed leases are above the
+account quota and when a share-queue field cannot be read.
+
+See [`cluster-nodes.md`](cluster-nodes.md) for the commands and for a three-node local example.
+
+### Record fields
+
+Every new field is optional, so records from earlier versions still read, with no accelerator types
+and the source `default`. The schema version does not change. An invalid share-queue field makes its
+record unreadable, and the record is then not used for any decision.
+
+| Record | New fields |
+| --- | --- |
+| profile | `share_queue_limits`: the account quota per type |
+| node | `share_queue_limits`: the effective limits; `node_quota`: the explicit values, present only when explicit; `profile_source`: `default` or `explicit` |
+| lease | `accelerator`: the type of a typed lease, absent for an untyped one |
+
 ## Messages
 
 A message is one file, written exclusively and never rewritten. Its id is a 13-digit millisecond
@@ -139,8 +200,11 @@ repeating it adds debug detail. Output is JSON on standard output. The exit stat
 | `hpc-core cluster send --root TEAM --node-id alice-skill-a1 --to alice-console-a1 --type notice` | Sends a message; `--body-file` gives its JSON object. |
 | `hpc-core cluster inbox --root TEAM --node-id alice-console-a1` | Lists this node's pending messages. |
 | `hpc-core cluster ack --root TEAM --node-id alice-console-a1 MESSAGE_ID` | Acknowledges a pending message. |
-| `hpc-core cluster limits --root TEAM --profile alice` | Shows a profile's limit, valid and stale leases and node count. |
+| `hpc-core cluster limits --root TEAM --profile alice` | Shows a profile's limit, valid and stale leases, node count and usage per accelerator type. |
 | `hpc-core cluster limits --root TEAM --profile alice --node-id alice-console-a1 --set 2` | Changes the limit to 2 (1 to 1024). |
+| `hpc-core cluster limits --root TEAM --profile alice --node-id alice-console-a1 --share-queue h200=2` | Sets the account quota for `h200` (0 to 1024). |
+| `hpc-core cluster limits --root TEAM --profile alice --node-id alice-console-a1 --show-node` | Shows the account quota, node quota, effective limits and source of a node. |
+| `hpc-core cluster limits --root TEAM --profile alice --node-id alice-console-a1 --reset-node` | Removes a node's explicit values so it follows the account quota. |
 | `hpc-core cluster check --root TEAM --read-only` | Runs the self-check and prints each finding. |
 
 `TEAM` stands for the team folder, `MESSAGE_ID` for a message id printed by `inbox`.
@@ -164,7 +228,9 @@ and a one-line hint. It exits 0 only when every finding is `ok`. `--read-only` s
 | `record.unreadable` | warn | Records or messages cannot be read; readers skip and count them. |
 | `record.name_mismatch` | warn | A node record's id differs from its file name. |
 | `record.version` | warn | A node record uses an unsupported schema version. |
-| `lease.over_limit` | warn | A profile holds more valid leases than its limit. |
+| `lease.over_limit` | warn | A profile holds more valid untyped leases than its limit. |
+| `lease.over_account` | warn | A profile holds more valid typed leases of a type than its account quota for that type. |
+| `share_queue.unreadable` | warn | Node, profile or lease records hold a share-queue field that cannot be read. |
 | `lease.stale` | warn | A profile holds leases whose holders stopped renewing. |
 | `profile.no_nodes` | warn | A profile has no node record. |
 | `temp.stale` | warn | A temporary file is older than 10 minutes, so a writer probably stopped. |

@@ -29,6 +29,9 @@ nfs-testbed: nothing was started or mounted
 
 ## One command per layer
 
+The local layer below needs root and an NFS client on the host. It was not run on the development
+host, which has neither. The cluster run further down is the layer that has been run.
+
 Run these from `repos/hpc-core`:
 
 ```bash
@@ -57,6 +60,57 @@ cover these behaviours:
 
 `down` leaves nothing behind: it unmounts B and then A, runs `docker compose down` with its volumes,
 and removes the two mount folders. It is safe to run when the testbed is not up.
+
+## Cluster run
+
+The cross-client checks in `tests/nfs/test_cross_client.py` run on a real shared folder of an HPC
+cluster. Each role is its own job on its own compute node, so the protocol is tested between
+separate NFS clients, not between two mounts of one machine.
+
+Roles, all in one run folder (`NFS_CROSS_ROOT`) on the shared export:
+
+- **writer** (`NFS_CROSS_ROLE=writer`, one compute node) registers, runs the race rounds, and
+  rewrites its record until the reader confirms its reads.
+- **reader** (`NFS_CROSS_ROLE=reader`, a second compute node) waits for the writer and the login
+  client, checks that discovery shows both online within 90 seconds, runs the race rounds, reads the
+  rewritten record, and runs the self-check.
+- **login** is a third client that registers and beats from the cluster's login node. It is a
+  separate script outside this repository, and this module does not run it.
+
+The roles order their steps with flag files under `team/flags` and report with files under
+`team/results`. No role compares clocks across hosts. `NFS_CROSS_WAIT` caps each wait (default 1200
+seconds; the cluster run used 7200). Use a new run folder for each run, and remove it afterwards.
+
+The single-client file in `test_protocol_over_nfs.py` can also run on the cluster export. Set
+`NFS_TESTBED_SHARED_EXPORT=1` with `NFS_TESTBED_A` and `NFS_TESTBED_B` pointing at folders on that
+export. The shared-export flag skips the mount-point check, because the job does not mount the
+export itself.
+
+Result of the last run (Python 3.12, two compute nodes plus the login node):
+
+| Check | Result |
+| --- | --- |
+| Discovery: both clients online | the reader saw the writer and the login client online within 90 s |
+| Race rounds (exclusive create) | 20 of 20 rounds had exactly one winner |
+| Rewrite reads | 3,719 reads, none missing, 20 distinct record versions, no partial record |
+| Writer rewrites during the window | 1,482 beats, none failed |
+| Self-check on the shared folder | no FAIL for `probe.rename`, `probe.hardlink`, `probe.exclusive`, or the listing and file-time checks; the listing delay was measured |
+
+Two things were seen on the shared export and are part of the design:
+
+- A read can fail with a stale handle (errno 116) while another client replaces the file. This
+  happened once in an earlier run and made the reader fail. The test now counts it as a transient
+  error and retries it. A partial record is never accepted. Consumers of the protocol must retry
+  this error the same way.
+- A writer's beat can fail the same way. The writer retries on its next beat and fails only on a
+  conflict.
+
+Limits of this run:
+
+- The cluster job uses the cluster's default NFS mount options. It does not reproduce the strict
+  (`noac`) and cached (`actimeo=60`) pair, so the attribute-cache case is covered only by the local
+  layer above.
+- The race rounds are ordered by flags, so the two creates are not truly simultaneous.
 
 ## Reading a skipped layer
 
