@@ -13,6 +13,13 @@ The package uses semantic versioning, `MAJOR.MINOR.PATCH`.
 - **Public API.** The public API is the set of names exported from `hpc_core.contract`,
   `hpc_core.transport` and `hpc_core.slurm` (their `__all__`). A name not in those lists is an
   internal detail and may change in any release.
+- **Team folder records.** Every record of the team folder protocol (manifest, node, profile,
+  lease and message) carries `schema_version`, which is `1` in this release. A change that renames,
+  removes or changes the meaning of a field, or that changes its size limit or identifier rule,
+  needs a new `schema_version`. A reader that meets a version it does not support reports the
+  record as unreadable and skips it; it never guesses. The pinned field lists are in
+  `tests/snapshots/cluster_records.json`, and the protocol is described in
+  [`cluster-coordination.md`](cluster-coordination.md).
 - **Test kit.** `hpc_core.testing` is not part of the public API. Its names and fixture files may
   change in any release, and each change to a golden case is listed in the release notes.
 - **Command-line surface.** The commands, sub-commands and options of `hpc-core` are public API.
@@ -22,12 +29,13 @@ The package uses semantic versioning, `MAJOR.MINOR.PATCH`.
 ## Version notes
 
 - **Unreleased, planned for 0.3.0** (minor, additive). Adds the `hpc-core` command and
-  `python -m hpc_core`, with the `parse`, `report`, `commands` and `skills` groups, and the two
-  skills `hpc-scheduler-output` and `hpc-run-report` in the package and the wheel. The `cli` layer
+  `python -m hpc_core`, with the `parse`, `report`, `commands`, `skills` and `cluster` groups, and
+  the two skills `hpc-scheduler-output` and `hpc-run-report` in the package and the wheel. The
+  `cluster` group and the `hpc_core.coordination` names are new, at record `schema_version` 1 (see
+  [`cluster-coordination.md`](cluster-coordination.md)). The `cli` layer
   is new; the contract, transport and slurm layers, the public names and the run-report schema are
-  unchanged, so nothing is removed or renamed. The version in `pyproject.toml` stays at 0.2.0
-  until the release that carries this change sets it to 0.3.0, together with the skills'
-  `metadata.version`.
+  unchanged, so nothing is removed or renamed. `pyproject.toml` and the skills' `metadata.version`
+  are set to 0.3.0 with this change.
 - **0.2.0** (minor, additive). Adds `squeue.CONSOLE_MONITOR`, the extended job id rule
   (`is_extended_job_id`, `validate_extended_job_id`), and the `JobRecord` fields `node_count`,
   `dependency_text` and `command`, which are keyword-only and unset unless a profile names them.

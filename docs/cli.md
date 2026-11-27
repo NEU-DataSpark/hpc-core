@@ -99,13 +99,35 @@ Lists and installs the skills shipped with the package. See [`skills.md`](skills
 hpc-core skills list
 ```
 
+### cluster
+
+Coordinates a team folder shared by several nodes: each node's liveness, profile limits shared
+through slot leases, and messages between nodes. The folder protocol, the liveness rules and the
+self-check codes are in [`cluster-coordination.md`](cluster-coordination.md). Every subcommand takes
+`--root`, the team folder, and `--verbose` to write the coordination events to standard error.
+
+| Command | Options |
+| --- | --- |
+| `cluster init` | `--root` |
+| `cluster nodes` | `--root` |
+| `cluster beat` | `--root`, `--node-id`, `--profile`, `--kind` (`console`, `skill` or `cli`), `--interval-seconds` (30 or more, default 60), `--machine` |
+| `cluster leave` | `--root`, `--node-id`, `--profile`, `--kind` |
+| `cluster send` | `--root`, `--node-id` (the sender), `--to`, `--type`, `--body-file` (a JSON object, or `-` for standard input), `--reply-to` |
+| `cluster inbox` | `--root`, `--node-id` |
+| `cluster ack` | `--root`, `--node-id`, `MESSAGE_ID` |
+| `cluster limits` | `--root`, `--profile`, and with `--set N` also `--node-id` |
+| `cluster check` | `--root`, `--read-only` |
+
+Every command writes its result as JSON to standard output. `check` prints one entry per finding,
+with its code, status and hint.
+
 ## Exit status
 
 | Status | Meaning |
 | --- | --- |
 | 0 | Success. |
-| 1 | The input was read but is not acceptable: an unsupported `schema_version`, a report with skipped rows, or a skill folder that already exists. |
-| 2 | A usage or argument error: a bad option, an invalid account or job id, an unknown profile or skill, or an input file that cannot be read. |
+| 1 | The input was read but is not acceptable: an unsupported `schema_version`, a report with skipped rows, or a skill folder that already exists. For `cluster`: the team folder is missing or not set up, a live node already holds the id, a recipient has no record, a self-check finding is not `ok`. |
+| 2 | A usage or argument error: a bad option, an invalid account or job id, an unknown profile or skill, an input file that cannot be read, or for `cluster` an invalid node, profile or message id, a limit out of range, or an interval under 30 seconds. |
 
 `parse` exits 0 when rows are skipped; its `skipped` count is the record of that. `report` exits 1
 when rows are skipped, because a report with unreadable rows is not fully acceptable.
