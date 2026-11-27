@@ -16,14 +16,18 @@
       "started_at",
       "interval_seconds",
       "heartbeat_count",
-      "instance_token"
+      "instance_token",
+      "share_queue_limits",
+      "node_quota",
+      "profile_source"
     ],
     "profile": [
       "schema_version",
       "profile_id",
       "concurrency_limit",
       "updated_by",
-      "updated_at"
+      "updated_at",
+      "share_queue_limits"
     ],
     "lease": [
       "schema_version",
@@ -31,7 +35,8 @@
       "slot",
       "node_id",
       "acquired_at",
-      "interval_seconds"
+      "interval_seconds",
+      "accelerator"
     ],
     "message": [
       "schema_version",

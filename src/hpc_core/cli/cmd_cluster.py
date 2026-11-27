@@ -23,9 +23,10 @@ from typing import Any
 
 from ..contract.identifiers import ValidationError
 from ..coordination import check, events, layout
-from ..coordination.limits import set_limit, usage
+from ..coordination.limits import set_limit, set_share_queue, usage
 from ..coordination.messages import SendRefused, acknowledge, pending, send
-from ..coordination.records import KINDS, ProfileRecord
+from ..coordination.profile import parse_share_queue, resolve
+from ..coordination.records import KINDS, ProfileRecord, Unreadable, decode_node, decode_profile
 from ..coordination.registry import (
     OUTCOME_CONFLICT,
     OUTCOME_FAILED,
@@ -33,6 +34,7 @@ from ..coordination.registry import (
     NodeSession,
     discover,
     init_layout,
+    reset_node_profile,
 )
 from ..coordination.store import FolderStore, LocalFolderStore, NotFound, StoreError
 from ._io import EXIT_OK, EXIT_UNACCEPTABLE, InputError, fail, print_json, read_text
@@ -113,6 +115,16 @@ def _open_set_up(args: argparse.Namespace) -> FolderStore:
     return store
 
 
+def _share_queue(text: str | None) -> dict[str, int] | None:
+    """The explicit values of a ``--share-queue`` argument. A refused value exits 1, not 2."""
+    if text is None:
+        return None
+    try:
+        return parse_share_queue(text) or None
+    except ValidationError as error:
+        raise _Refused(str(error)) from None
+
+
 def _identity(args: argparse.Namespace) -> NodeIdentity:
     return NodeIdentity(
         node_id=args.node_id,
@@ -120,6 +132,7 @@ def _identity(args: argparse.Namespace) -> NodeIdentity:
         kind=args.kind,
         machine=args.machine or "",
         interval_seconds=args.interval_seconds,
+        node_quota=_share_queue(args.share_queue),
     )
 
 
@@ -150,7 +163,11 @@ def nodes_run(args: argparse.Namespace) -> int:
 
 def beat_run(args: argparse.Namespace) -> int:
     store = _open(args)
-    result = NodeSession(store, _identity(args)).register()
+    identity = _identity(args)
+    try:
+        result = NodeSession(store, identity).register()
+    except ValidationError as error:
+        raise _Refused(str(error)) from None
     if result.outcome == OUTCOME_CONFLICT:
         return fail("the node id is held by another live instance", EXIT_UNACCEPTABLE)
     if result.outcome == OUTCOME_FAILED:
@@ -218,6 +235,10 @@ def ack_run(args: argparse.Namespace) -> int:
 
 def limits_run(args: argparse.Namespace) -> int:
     store = _open_set_up(args)
+    if args.share_queue is not None:
+        return _set_account_quota(store, args)
+    if args.show_node or args.reset_node:
+        return _node_profile(store, args)
     if args.set is None:
         print_json(usage(store, args.profile))
         return EXIT_OK
@@ -225,6 +246,48 @@ def limits_run(args: argparse.Namespace) -> int:
         raise ValidationError("--set needs --node-id, the node that changes the limit")
     record: ProfileRecord = set_limit(store, args.profile, args.set, node_id=args.node_id)
     print_json({"profile_id": record.profile_id, "concurrency_limit": record.concurrency_limit})
+    return EXIT_OK
+
+
+def _set_account_quota(store: FolderStore, args: argparse.Namespace) -> int:
+    """Set the account quota per accelerator type of the profile. Writes only when it is valid."""
+    if args.node_id is None:
+        raise _Refused("--share-queue needs --node-id, the node that changes the quota")
+    limits = _share_queue(args.share_queue) or {}
+    try:
+        record = set_share_queue(store, args.profile, limits, node_id=args.node_id)
+    except ValidationError as error:
+        raise _Refused(str(error)) from None
+    print_json({"profile_id": record.profile_id, "share_queue_account": record.share_queue_limits})
+    return EXIT_OK
+
+
+def _node_profile(store: FolderStore, args: argparse.Namespace) -> int:
+    """Show a node's account quota, node quota, effective limits and source, or reset its node
+    quota so that it follows the account quota again."""
+    if args.node_id is None:
+        raise _Refused("--show-node and --reset-node need --node-id, the node to read or reset")
+    if args.reset_node:
+        outcome = reset_node_profile(store, args.node_id)
+        if outcome == "failed":
+            return fail("the team folder could not be written", EXIT_UNACCEPTABLE)
+        print_json({"node_id": args.node_id, "outcome": outcome})
+        return EXIT_OK
+    node = decode_node(store.read_text(layout.node_path(args.node_id)), args.node_id)
+    account = decode_profile(store.read_text(layout.profile_path(args.profile)), args.profile)
+    if isinstance(node, Unreadable) or isinstance(account, Unreadable):
+        raise NotFound(args.node_id)
+    resolved = resolve(account.share_queue_limits, node.node_quota)
+    print_json(
+        {
+            "node_id": node.node_id,
+            "profile_id": args.profile,
+            "share_queue_account": resolved.account,
+            "share_queue_node_quota": resolved.node_quota,
+            "share_queue_effective": resolved.effective,
+            "profile_source": resolved.source,
+        }
+    )
     return EXIT_OK
 
 
@@ -294,6 +357,13 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
         help=f"expected seconds between beats (30 or more; default {DEFAULT_INTERVAL_SECONDS})",
     )
     beat.add_argument("--machine", default="", help="a label for the machine the node runs on")
+    beat.add_argument(
+        "--share-queue",
+        metavar="TYPE=N[,TYPE=N...]",
+        default=None,
+        help="pin this node's share-queue limits per accelerator type (at most the account "
+        "quota); without it the node keeps the values it already has",
+    )
 
     leave = _add(sub, "leave", "Remove this node's record.", _guarded(leave_run))
     _node(leave, required_kind=True)
@@ -329,6 +399,23 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
         type=int,
         default=None,
         help=f"set the concurrency limit ({layout.LIMIT_MIN} to {layout.LIMIT_MAX})",
+    )
+    limits.add_argument(
+        "--share-queue",
+        metavar="TYPE=N[,TYPE=N...]",
+        default=None,
+        help="set the account quota per accelerator type (0 to 1024 each); needs --node-id",
+    )
+    limits.add_argument(
+        "--show-node",
+        action="store_true",
+        help="show a node's account quota, node quota, effective limits and source "
+        "(needs --node-id)",
+    )
+    limits.add_argument(
+        "--reset-node",
+        action="store_true",
+        help="remove a node's explicit values so it follows the account quota; needs --node-id",
     )
 
     check_cmd = _add(

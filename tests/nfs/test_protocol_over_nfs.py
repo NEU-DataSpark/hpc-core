@@ -22,7 +22,16 @@ import pytest
 
 from hpc_core.coordination import layout
 from hpc_core.coordination.check import OK, WARN, run_check
-from hpc_core.coordination.limits import acquire, set_limit, usage
+from hpc_core.coordination.limits import (
+    GRANTED,
+    NO_SLOT,
+    REASON_NODE_LIMIT,
+    acquire,
+    acquire_typed,
+    set_limit,
+    set_share_queue,
+    usage,
+)
 from hpc_core.coordination.records import NodeRecord, Unreadable, decode_node, encode
 from hpc_core.coordination.registry import NodeIdentity, NodeSession, discover, init_layout
 from hpc_core.coordination.store import Exists, LocalFolderStore, NotFound
@@ -49,6 +58,10 @@ def mounts() -> tuple[Path, Path]:
     second = os.environ.get("NFS_TESTBED_B", "")
     if not first or not second:
         pytest.skip("NFS testbed not up: run tools/nfs-testbed/run.sh up, then run.sh test")
+    if os.environ.get("NFS_TESTBED_SHARED_EXPORT") == "1":
+        # A cluster run: both paths are folders on a shared export that the job already mounts
+        # (see the cluster-run section of docs/testing-on-nfs.md). They need not be mount points.
+        return Path(first), Path(second)
     for path in (first, second):
         if not os.path.ismount(path):
             pytest.skip("NFS testbed not mounted: run tools/nfs-testbed/run.sh up first")
@@ -188,3 +201,61 @@ def test_the_self_check_through_b_reports_the_listing_delay(team: Team) -> None:
     delay = {r.code: r for r in run_check(team.store_b)}.get("probe.listing_delay")
     assert delay is not None, "the probe through B did not measure the listing delay"
     assert delay.status in (OK, WARN)
+
+
+def test_three_pinned_nodes_show_their_limits_through_b_and_hold_the_account_through_a(
+    team: Team,
+) -> None:
+    """Account h200=2 with nodes pinned 1, 1 and 0: the pins read through B, and the slots taken
+    through A and B stop at the node limits and the account quota."""
+    store_a, store_b = team.store_a, team.store_b
+    pinned = {"alice-console-p1": 1, "alice-console-p2": 1, "alice-console-p3": 0}
+    init_layout(store_a, "team")
+    set_share_queue(store_a, "alice", {"h200": 2}, node_id="alice-console-p1", clock=time.time)
+    for node, quota in pinned.items():
+        NodeSession(
+            store_a,
+            NodeIdentity(node, "alice", "console", interval_seconds=30, node_quota={"h200": quota}),
+            clock=time.time,
+        ).register()
+
+    def limits_through_b() -> dict[str, int] | None:
+        records = {view.record.node_id: view.record for view in discover(store_b).nodes}
+        if all(node in records for node in pinned):
+            return {node: records[node].share_queue_limits.get("h200", 0) for node in pinned}
+        return None
+
+    limits = _wait_for(limits_through_b)
+    assert limits == pinned, f"effective limits read through B: {limits}"
+
+    first = acquire_typed(
+        store_a,
+        "alice",
+        "h200",
+        node_id="alice-console-p1",
+        node_limit=limits["alice-console-p1"],
+        interval_seconds=30,
+        clock=time.time,
+    )
+    second = acquire_typed(
+        store_b,
+        "alice",
+        "h200",
+        node_id="alice-console-p2",
+        node_limit=limits["alice-console-p2"],
+        interval_seconds=30,
+        clock=time.time,
+    )
+    refused = acquire_typed(
+        store_b,
+        "alice",
+        "h200",
+        node_id="alice-console-p3",
+        node_limit=limits["alice-console-p3"],
+        interval_seconds=30,
+        clock=time.time,
+    )
+    assert (first.outcome, second.outcome) == (GRANTED, GRANTED)
+    assert (refused.outcome, refused.reason) == (NO_SLOT, REASON_NODE_LIMIT)
+    h200 = next(item for item in usage(store_a, "alice").accelerators if item.accelerator == "h200")
+    assert h200.valid_leases == 2

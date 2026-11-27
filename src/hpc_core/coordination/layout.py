@@ -8,6 +8,8 @@ file.
 from __future__ import annotations
 
 import re
+from collections.abc import Iterable, Mapping
+from typing import Any
 
 from ..contract.identifiers import ValidationError
 
@@ -65,6 +67,65 @@ def validate_slot(slot: int) -> int:
     if isinstance(slot, bool) or not isinstance(slot, int) or not LIMIT_MIN <= slot <= SLOT_MAX:
         raise ValidationError("slot number must be a whole number from 1 to 1024")
     return slot
+
+
+# Share-queue (accelerator) limits. A type name is 1 to 32 lower-case letters, digits or hyphens
+# that start with a letter or digit; an upper-case name is folded to lower case before the check.
+ACCELERATOR_PATTERN = re.compile(r"[a-z0-9][a-z0-9-]{0,31}")
+ACCELERATOR_RULE = (
+    "must be 1 to 32 lower-case letters, digits or hyphens, starting with a letter or digit"
+)
+ACCELERATOR_MAX_TYPES = 16
+SHARE_LIMIT_MIN = 0
+
+
+def validate_accelerator(name: object) -> str:
+    """Return the lower-case accelerator type name, or raise ValidationError naming the rule."""
+    if not isinstance(name, str):
+        raise ValidationError("accelerator type must be text")
+    folded = name.lower()
+    if ACCELERATOR_PATTERN.fullmatch(folded) is None:
+        raise ValidationError(f"accelerator type {name!r} {ACCELERATOR_RULE}")
+    return folded
+
+
+def validate_share_limit(value: object, accelerator: str) -> int:
+    """A per-type limit from 0 to 1024. Zero is valid and means no slot of that type."""
+    if (
+        isinstance(value, bool)
+        or not isinstance(value, int)
+        or not SHARE_LIMIT_MIN <= value <= LIMIT_MAX
+    ):
+        raise ValidationError(
+            f"limit for {accelerator} must be a whole number from 0 to 1024, not {value!r}"
+        )
+    return value
+
+
+def validate_share_pairs(pairs: Iterable[tuple[object, object]]) -> dict[str, int]:
+    """Build a per-type limit mapping from (name, value) pairs.
+
+    Refuses more than 16 types, a type name given twice (after case folding), a bad name and a
+    value outside 0 to 1024. Returns the mapping with lower-case names.
+    """
+    result: dict[str, int] = {}
+    count = 0
+    for raw_name, raw_value in pairs:
+        count += 1
+        if count > ACCELERATOR_MAX_TYPES:
+            raise ValidationError(
+                f"a profile holds at most {ACCELERATOR_MAX_TYPES} accelerator types"
+            )
+        folded = validate_accelerator(raw_name)
+        if folded in result:
+            raise ValidationError(f"accelerator type {folded} is given more than once")
+        result[folded] = validate_share_limit(raw_value, folded)
+    return result
+
+
+def validate_share_queue(mapping: Mapping[Any, Any]) -> dict[str, int]:
+    """The per-type limit mapping of a record or a request; see ``validate_share_pairs``."""
+    return validate_share_pairs(mapping.items())
 
 
 def cluster_path() -> str:

@@ -8,7 +8,7 @@ a bad field: it returns ``Unreadable`` with a reason, so a listing can skip the 
 from __future__ import annotations
 
 import json
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 from typing import Any, TypeVar
 
@@ -22,7 +22,9 @@ from .layout import (
     NODE_RECORD_LIMIT,
     PROFILE_RECORD_LIMIT,
     TYPE_PATTERN,
+    validate_accelerator,
     validate_id,
+    validate_share_queue,
 )
 
 SCHEMA_VERSION = 1
@@ -30,6 +32,10 @@ SUPPORTED_VERSIONS: frozenset[int] = frozenset({SCHEMA_VERSION})
 KINDS: tuple[str, ...] = ("console", "skill", "cli")
 MIN_INTERVAL_SECONDS = 30
 DEFAULT_INTERVAL_SECONDS = 60
+# Where a node's effective limits come from: its explicit values, or the account quota alone.
+SOURCE_DEFAULT = "default"
+SOURCE_EXPLICIT = "explicit"
+SOURCES: tuple[str, ...] = (SOURCE_DEFAULT, SOURCE_EXPLICIT)
 
 # Reasons a record is unreadable. Each maps to a self-check code in ``check``.
 REASON_NOT_JSON = "not-json"
@@ -39,6 +45,12 @@ REASON_FIELD = "invalid-field"
 REASON_TOO_LARGE = "too-large"
 REASON_NAME = "name-mismatch"
 REASON_EMPTY = "empty"
+# A share-queue field (a per-type limit, an accelerator name or a profile source) outside its rules.
+REASON_SHARE = "invalid-share-queue"
+
+
+class _ShareFieldError(ValueError):
+    """Raised for a share-queue field that breaks its rule; decoding reports REASON_SHARE."""
 
 
 @dataclass(frozen=True)
@@ -67,6 +79,11 @@ class NodeRecord:
     interval_seconds: int
     heartbeat_count: int
     instance_token: str
+    # Optional share-queue fields (schema version 1, additive): the node's effective limits per
+    # accelerator type, its explicit values when it has any, and where those limits come from.
+    share_queue_limits: dict[str, int] = field(default_factory=dict)
+    node_quota: dict[str, int] | None = None
+    profile_source: str = SOURCE_DEFAULT
 
 
 @dataclass(frozen=True)
@@ -76,6 +93,8 @@ class ProfileRecord:
     concurrency_limit: int
     updated_by: str
     updated_at: str
+    # The account quota per accelerator type. Empty for a profile with no share-queue limits.
+    share_queue_limits: dict[str, int] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -86,6 +105,8 @@ class LeaseRecord:
     node_id: str
     acquired_at: str
     interval_seconds: int
+    # The accelerator type of a typed lease; absent for an untyped lease.
+    accelerator: str | None = None
 
 
 @dataclass(frozen=True)
@@ -123,9 +144,27 @@ def time_epoch(text: str) -> float:
     return parse_report_time(text).timestamp()
 
 
+def _data(record: AnyRecord) -> dict[str, Any]:
+    """The record as a dict. Optional share-queue fields that are empty are left out, so a record
+    with no share-queue values is written exactly as earlier versions wrote it."""
+    data = asdict(record)
+    if isinstance(record, ProfileRecord) and not record.share_queue_limits:
+        del data["share_queue_limits"]
+    if isinstance(record, NodeRecord):
+        if not record.share_queue_limits:
+            del data["share_queue_limits"]
+        if record.node_quota is None:
+            del data["node_quota"]
+    if isinstance(record, LeaseRecord) and record.accelerator is None:
+        del data["accelerator"]
+    return data
+
+
 def encode(record: AnyRecord) -> str:
     """Compact one-line JSON with a trailing newline. Refuses a record over its size limit."""
-    text = json.dumps(asdict(record), separators=(",", ":"), sort_keys=True, ensure_ascii=False)
+    if isinstance(record, (ProfileRecord, NodeRecord)):
+        validate_share_queue(dict(record.share_queue_limits))
+    text = json.dumps(_data(record), separators=(",", ":"), sort_keys=True, ensure_ascii=False)
     text += "\n"
     limit = RECORD_LIMITS[type(record)]
     if len(text.encode("utf-8")) > limit:
@@ -166,10 +205,44 @@ def _ident(value: Any, what: str) -> str:
     return validate_id(_text(value), what)
 
 
+def _share_map(value: Any) -> dict[str, int]:
+    """A share-queue mapping read from a record. Anything outside the rules is an invalid field."""
+    if not isinstance(value, dict):
+        raise _ShareFieldError("share-queue limits must be an object")
+    try:
+        return validate_share_queue(value)
+    except ValidationError as error:
+        raise _ShareFieldError(str(error)) from error
+
+
+def _optional_node_quota(data: dict[str, Any]) -> dict[str, int] | None:
+    value = data.get("node_quota")
+    return None if value is None else _share_map(value)
+
+
+def _optional_share_map(data: dict[str, Any], key: str) -> dict[str, int]:
+    return _share_map(data[key]) if key in data else {}
+
+
 def _when(value: Any) -> str:
     text = _text(value)
     time_epoch(text)
     return text
+
+
+def _source(value: Any) -> str:
+    if value not in SOURCES:
+        raise _ShareFieldError("profile source must be default or explicit")
+    return str(value)
+
+
+def _accelerator_or_none(value: Any) -> str | None:
+    if value is None:
+        return None
+    try:
+        return validate_accelerator(value)
+    except ValidationError as error:
+        raise _ShareFieldError(str(error)) from error
 
 
 def _build(record_type: type[R], text: str, expected_id: str | None) -> R | Unreadable:
@@ -178,6 +251,8 @@ def _build(record_type: type[R], text: str, expected_id: str | None) -> R | Unre
         return data
     try:
         record = _from_data(record_type, data)
+    except _ShareFieldError:
+        return Unreadable(REASON_SHARE)
     except (ValueError, ValidationError, TypeError, KeyError):
         return Unreadable(REASON_FIELD)
     id_field = _ID_FIELD[record_type]
@@ -212,6 +287,9 @@ def _from_data(record_type: type[R], data: dict[str, Any]) -> R:
             interval_seconds=_integer(data["interval_seconds"], 1, 86400),
             heartbeat_count=_integer(data["heartbeat_count"], 0, 2**53),
             instance_token=_ident(data["instance_token"], "instance token"),
+            share_queue_limits=_optional_share_map(data, "share_queue_limits"),
+            node_quota=_optional_node_quota(data),
+            profile_source=_source(data.get("profile_source", SOURCE_DEFAULT)),
         )
     if record_type is ProfileRecord:
         return ProfileRecord(  # type: ignore[return-value]
@@ -220,6 +298,7 @@ def _from_data(record_type: type[R], data: dict[str, Any]) -> R:
             concurrency_limit=_integer(data["concurrency_limit"], LIMIT_MIN, LIMIT_MAX),
             updated_by=_ident(data["updated_by"], "node id"),
             updated_at=_when(data["updated_at"]),
+            share_queue_limits=_optional_share_map(data, "share_queue_limits"),
         )
     if record_type is LeaseRecord:
         return LeaseRecord(  # type: ignore[return-value]
@@ -229,6 +308,7 @@ def _from_data(record_type: type[R], data: dict[str, Any]) -> R:
             node_id=_ident(data["node_id"], "node id"),
             acquired_at=_when(data["acquired_at"]),
             interval_seconds=_integer(data["interval_seconds"], 1, 86400),
+            accelerator=_accelerator_or_none(data.get("accelerator")),
         )
     if record_type is MessageRecord:
         body = data["body"]

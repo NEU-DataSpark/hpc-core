@@ -10,17 +10,19 @@ from __future__ import annotations
 
 import secrets
 import time
-from collections.abc import Callable
-from dataclasses import dataclass, field
+from collections.abc import Callable, Mapping
+from dataclasses import dataclass, field, replace
 
 from ..contract.identifiers import ValidationError
 from . import events, layout
-from .layout import PRUNE_AGE_SECONDS, subfolder_path
+from .layout import PRUNE_AGE_SECONDS, subfolder_path, validate_share_queue
+from .profile import check_against_account, resolve
 from .records import (
     DEFAULT_INTERVAL_SECONDS,
     KINDS,
     MIN_INTERVAL_SECONDS,
     SCHEMA_VERSION,
+    SOURCE_DEFAULT,
     ClusterManifest,
     NodeRecord,
     ProfileRecord,
@@ -90,6 +92,9 @@ class NodeIdentity:
     software_version: str = ""
     interval_seconds: int = DEFAULT_INTERVAL_SECONDS
     concurrency_limit: int = DEFAULT_LIMIT
+    # The node's explicit share-queue values. None means keep whatever the node's own record
+    # already holds (an empty mapping counts as None); the account quota is never set here.
+    node_quota: dict[str, int] | None = None
 
     def __post_init__(self) -> None:
         layout.validate_id(self.node_id, "node id")
@@ -97,6 +102,9 @@ class NodeIdentity:
         check_kind(self.kind)
         check_interval(self.interval_seconds)
         layout.validate_limit(self.concurrency_limit)
+        if self.node_quota is not None:
+            folded = validate_share_queue(dict(self.node_quota))
+            object.__setattr__(self, "node_quota", folded or None)
 
 
 @dataclass(frozen=True)
@@ -167,6 +175,63 @@ def _age_of(listing_now: float, modified: float) -> float:
     return max(listing_now - modified, 0.0)
 
 
+def _explicit(node_quota: Mapping[str, int] | None) -> dict[str, int] | None:
+    """A node quota as stored: validated and folded, or None when there are no explicit values."""
+    if node_quota is None:
+        return None
+    return validate_share_queue(dict(node_quota)) or None
+
+
+def _own_quota(store: FolderStore, node_id: str) -> dict[str, int] | None:
+    """The explicit values the node's own record holds, or None when there are none."""
+    try:
+        record = decode_node(store.read_text(layout.node_path(node_id)), node_id)
+    except NotFound:
+        return None
+    return None if isinstance(record, Unreadable) else record.node_quota
+
+
+def reset_node_profile(store: FolderStore, node_id: str) -> str:
+    """Remove a node's explicit values so its effective limits equal the account quota.
+
+    Edits only the explicit values and the derived fields of the node's own record; the instance
+    token and heartbeat count are kept. Returns ``reset``, ``unchanged`` (no explicit values, so
+    nothing is written), ``absent`` (no readable record) or ``failed``.
+    """
+    path = layout.node_path(node_id)
+    try:
+        record = decode_node(store.read_text(path), node_id)
+    except NotFound:
+        return "absent"
+    except StoreError:
+        return "failed"
+    if isinstance(record, Unreadable):
+        return "absent"
+    if record.node_quota is None:
+        return "unchanged"
+    account = _account_of(store, record.profile_id)
+    resolved = resolve(account, None)
+    updated = replace(
+        record,
+        node_quota=None,
+        share_queue_limits=resolved.effective,
+        profile_source=SOURCE_DEFAULT,
+    )
+    try:
+        store.write_text(path, encode(updated))
+    except StoreError:
+        return "failed"
+    return "reset"
+
+
+def _account_of(store: FolderStore, profile_id: str) -> dict[str, int]:
+    try:
+        record = decode_profile(store.read_text(layout.profile_path(profile_id)), profile_id)
+    except NotFound:
+        return {}
+    return {} if isinstance(record, Unreadable) else dict(record.share_queue_limits)
+
+
 @dataclass
 class NodeSession:
     """One running node: its identity, its instance token and its heartbeat state.
@@ -174,6 +239,10 @@ class NodeSession:
     ``clock`` stamps the node's own record fields only. Liveness never reads it: the folder's file
     times and the folder host's time decide. A session that is not the owner of its node id sees a
     conflict and writes nothing.
+
+    The node's explicit share-queue values live in its own node record, so an ordinary beat keeps
+    them. The record's effective limits are recomputed at every write from the current account
+    quota, so a change of the account takes effect at the next beat.
     """
 
     store: FolderStore
@@ -184,8 +253,14 @@ class NodeSession:
     consecutive_failures: int = 0
     started_at: str = ""
 
-    def _record(self, count: int) -> NodeRecord:
+    def _record(
+        self, count: int, node_quota: dict[str, int] | None, account: Mapping[str, int]
+    ) -> NodeRecord:
         identity = self.identity
+        resolved = resolve(account, node_quota)
+        # A session that never joined here has no start time yet. An empty one would make the
+        # record unreadable, and the node would drop out of discovery; this write's time stands in.
+        started_at = self.started_at or time_text(self.clock())
         return NodeRecord(
             schema_version=SCHEMA_VERSION,
             node_id=identity.node_id,
@@ -194,10 +269,13 @@ class NodeSession:
             display_name=identity.display_name or identity.node_id,
             machine=identity.machine,
             software_version=identity.software_version,
-            started_at=self.started_at,
+            started_at=started_at,
             interval_seconds=identity.interval_seconds,
             heartbeat_count=count,
             instance_token=self.token,
+            share_queue_limits=resolved.effective,
+            node_quota=resolved.node_quota,
+            profile_source=resolved.source,
         )
 
     def _failure(self, error: StoreError, during: str) -> BeatResult:
@@ -239,10 +317,54 @@ class NodeSession:
         age = _age_of(listing.now, entry.modified)
         return classify(age, record.interval_seconds) == ONLINE
 
+    def _account(self) -> dict[str, int]:
+        """The account quota per type from the profile record; empty when there is no record."""
+        profile_id = self.identity.profile_id
+        try:
+            record = decode_profile(
+                self.store.read_text(layout.profile_path(profile_id)), profile_id
+            )
+        except NotFound:
+            return {}
+        if isinstance(record, Unreadable):
+            events.emit(events.RECORD_UNREADABLE, kind="profile", reason=record.reason)
+            return {}
+        return dict(record.share_queue_limits)
+
     def register(self) -> BeatResult:
-        """Create the layout and the profile if needed, then write the node record."""
+        """Create the layout and the profile if needed, then write the node record.
+
+        An explicit node quota above the account quota is refused before anything is written.
+        """
+        return self._join(self.identity.node_quota, keep=True)
+
+    def beat(self) -> BeatResult:
+        """Refresh the node record. Registers again when the record is gone."""
+        return self._publish(self.identity.node_quota, keep=True)
+
+    def publish_profile(self, node_quota: Mapping[str, int] | None) -> BeatResult:
+        """Set the node's explicit values now (None or empty means default) and publish them.
+
+        Refused with ValidationError, and nothing written, when a value is above the account quota.
+        """
+        quota = _explicit(node_quota)
+        try:
+            account = self._account() if quota is not None else {}
+        except StoreError as error:
+            return self._failure(error, "publish")
+        if quota is not None:
+            check_against_account(quota, account)
+        self.identity = replace(self.identity, node_quota=quota)
+        return self._publish(quota, keep=False)
+
+    def _join(self, node_quota: dict[str, int] | None, *, keep: bool) -> BeatResult:
         self.started_at = time_text(self.clock())
         try:
+            account = self._account()
+            if keep and node_quota is None:
+                node_quota = _own_quota(self.store, self.identity.node_id)
+            if node_quota is not None:
+                check_against_account(node_quota, account)
             init_layout(self.store)
             profile = ensure_profile(
                 self.store,
@@ -257,7 +379,8 @@ class NodeSession:
                 events.emit(events.NODE_CONFLICT, node_id=self.identity.node_id)
                 return BeatResult(OUTCOME_CONFLICT, None, 0, self.heartbeat_count)
             self.heartbeat_count = 0
-            self.store.write_text(layout.node_path(self.identity.node_id), encode(self._record(0)))
+            record = self._record(0, node_quota, account)
+            self.store.write_text(layout.node_path(self.identity.node_id), encode(record))
         except StoreError as error:
             return self._failure(error, "register")
         self.consecutive_failures = 0
@@ -269,21 +392,25 @@ class NodeSession:
         )
         return BeatResult(OUTCOME_REGISTERED, None, 0, self.heartbeat_count)
 
-    def beat(self) -> BeatResult:
-        """Refresh the node record. Registers again when the record is gone."""
+    def _publish(self, node_quota: dict[str, int] | None, *, keep: bool) -> BeatResult:
         path = layout.node_path(self.identity.node_id)
         try:
             try:
                 record = decode_node(self.store.read_text(path), self.identity.node_id)
             except NotFound:
-                return self.register()
+                return self._join(node_quota, keep=keep)
+            current: NodeRecord | None = None
             if isinstance(record, Unreadable):
                 events.emit(events.RECORD_UNREADABLE, kind="node", reason=record.reason)
-            elif record.instance_token != self.token:
-                events.emit(events.NODE_CONFLICT, node_id=self.identity.node_id)
-                return BeatResult(OUTCOME_CONFLICT, None, self.consecutive_failures, 0)
+            else:
+                current = record
+                if current.instance_token != self.token:
+                    events.emit(events.NODE_CONFLICT, node_id=self.identity.node_id)
+                    return BeatResult(OUTCOME_CONFLICT, None, self.consecutive_failures, 0)
+            if keep and node_quota is None and current is not None:
+                node_quota = current.node_quota
             count = self.heartbeat_count + 1
-            self.store.write_text(path, encode(self._record(count)))
+            self.store.write_text(path, encode(self._record(count, node_quota, self._account())))
         except StoreError as error:
             return self._failure(error, "beat")
         self.heartbeat_count = count

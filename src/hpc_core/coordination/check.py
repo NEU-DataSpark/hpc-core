@@ -9,18 +9,20 @@ time, and removes them again. ``read_only`` skips the probe and writes nothing.
 from __future__ import annotations
 
 import secrets
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from . import layout
 from .limits import read_profile
 from .records import (
     REASON_NAME,
+    REASON_SHARE,
     REASON_VERSION,
     Unreadable,
     decode_lease,
     decode_manifest,
     decode_message,
     decode_node,
+    decode_profile,
 )
 from .registry import ONLINE, classify, discover
 from .store import Exists, FolderStore, NotFound, StoreError
@@ -56,6 +58,7 @@ def run_check(store: FolderStore, *, read_only: bool = False) -> list[CheckResul
         results.extend(_layout(store))
         results.extend(_records(store))
         results.extend(_leases_and_profiles(store))
+        results.extend(_share_queue(store))
         results.extend(_temporary_files(store))
         if not read_only:
             results.extend(_probe(store))
@@ -174,6 +177,7 @@ def _leases_and_profiles(store: FolderStore) -> list[CheckResult]:
         profile_files = ()
     nodes = discover(store).nodes
     over_limit = 0
+    over_account = 0
     stale = 0
     without_nodes = 0
     for entry in profile_files:
@@ -187,16 +191,26 @@ def _leases_and_profiles(store: FolderStore) -> list[CheckResult]:
             continue
         if isinstance(profile, Unreadable):
             continue
-        valid, stale_here = _lease_counts(store, profile_id)
-        over_limit += valid > profile.concurrency_limit
-        stale += stale_here > 0
+        counts = _lease_counts(store, profile_id)
+        over_limit += counts.untyped_valid > profile.concurrency_limit
+        over_account += any(
+            held > profile.share_queue_limits.get(accelerator, 0)
+            for accelerator, held in counts.typed_valid.items()
+        )
+        stale += counts.stale > 0
         without_nodes += not any(view.record.profile_id == profile_id for view in nodes)
     return [
         _count(
             "lease.over_limit",
             over_limit,
-            "profiles hold more leases than their limit",
-            "no profile holds more leases than its limit",
+            "profiles hold more untyped leases than their limit",
+            "no profile holds more untyped leases than its limit",
+        ),
+        _count(
+            "lease.over_account",
+            over_account,
+            "profiles hold more typed leases than their account quota for a type",
+            "no profile holds more typed leases than its account quota",
         ),
         _count("lease.stale", stale, "profiles hold stale leases", "no profile holds stale leases"),
         _count(
@@ -208,24 +222,68 @@ def _leases_and_profiles(store: FolderStore) -> list[CheckResult]:
     ]
 
 
-def _lease_counts(store: FolderStore, profile_id: str) -> tuple[int, int]:
+@dataclass
+class _LeaseCounts:
+    """Valid untyped leases, stale leases, valid typed leases per type, and unreadable typed
+    fields found while reading the profile's leases."""
+
+    untyped_valid: int = 0
+    stale: int = 0
+    typed_valid: dict[str, int] = field(default_factory=dict)
+    share_unreadable: int = 0
+
+
+def _lease_counts(store: FolderStore, profile_id: str) -> _LeaseCounts:
+    counts = _LeaseCounts()
     folder = layout.lease_dir(profile_id)
     try:
         listing = store.list_dir(folder)
         texts = store.read_all(folder)
     except NotFound:
-        return 0, 0
-    valid = 0
-    stale = 0
+        return counts
     for entry in listing.entries:
         record = decode_lease(texts.get(entry.name, ""))
         if isinstance(record, Unreadable):
+            counts.share_unreadable += record.reason == REASON_SHARE
             continue
-        if classify(listing.now - entry.modified, record.interval_seconds) == ONLINE:
-            valid += 1
+        if classify(listing.now - entry.modified, record.interval_seconds) != ONLINE:
+            counts.stale += 1
+        elif record.accelerator is None:
+            counts.untyped_valid += 1
         else:
-            stale += 1
-    return valid, stale
+            counts.typed_valid[record.accelerator] = (
+                counts.typed_valid.get(record.accelerator, 0) + 1
+            )
+    return counts
+
+
+def _share_queue(store: FolderStore) -> list[CheckResult]:
+    """Count node, profile and lease records whose share-queue fields cannot be read."""
+    unreadable = 0
+    for folder, decode in (
+        (layout.subfolder_path("nodes"), decode_node),
+        (layout.subfolder_path("profiles"), decode_profile),
+    ):
+        try:
+            texts = store.read_all(folder)
+        except NotFound:
+            continue
+        for file_name, text in texts.items():
+            if not file_name.endswith(_JSON):
+                continue
+            stem = file_name[: -len(_JSON)]
+            record = decode(text, expected_id=stem)
+            unreadable += isinstance(record, Unreadable) and record.reason == REASON_SHARE
+    for profile_id in _subfolders(store, layout.subfolder_path("leases")):
+        unreadable += _lease_counts(store, profile_id).share_unreadable
+    return [
+        _count(
+            "share_queue.unreadable",
+            unreadable,
+            "records hold share-queue fields that cannot be read",
+            "every share-queue field can be read",
+        )
+    ]
 
 
 def _temporary_files(store: FolderStore) -> list[CheckResult]:

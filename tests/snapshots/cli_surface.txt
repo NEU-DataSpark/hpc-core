@@ -14,6 +14,7 @@ hpc-core cluster beat
   --kind {console,skill,cli} (required)
   --interval-seconds INTERVAL_SECONDS
   --machine MACHINE
+  --share-queue TYPE=N[,TYPE=N...]
 hpc-core cluster check
   --root ROOT (required)
   --verbose
@@ -37,6 +38,9 @@ hpc-core cluster limits
   --profile PROFILE (required)
   --node-id NODE_ID
   --set LIMIT
+  --share-queue TYPE=N[,TYPE=N...]
+  --show-node
+  --reset-node
 hpc-core cluster nodes
   --root ROOT (required)
   --verbose

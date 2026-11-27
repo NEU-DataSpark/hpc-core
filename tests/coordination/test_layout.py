@@ -47,3 +47,43 @@ def test_limits_and_slots_have_their_ranges() -> None:
 def test_size_limits() -> None:
     assert layout.NODE_RECORD_LIMIT == 16 * 1024
     assert layout.MESSAGE_LIMIT == 64 * 1024
+
+
+@pytest.mark.parametrize("name", ["h200", "h100", "a-b", "9x", "a", "x" * 32])
+def test_accelerator_names_that_follow_the_rule_are_accepted(name: str) -> None:
+    assert layout.validate_accelerator(name) == name
+
+
+def test_upper_case_accelerator_names_are_folded_to_lower_case() -> None:
+    assert layout.validate_accelerator("H200") == "h200"
+    assert layout.validate_accelerator("H-100") == "h-100"
+
+
+@pytest.mark.parametrize("name", ["h 200", "h200/x", "x" * 33, "-h200", "h_200", "", "h200.1"])
+def test_accelerator_names_outside_the_rule_are_refused_with_the_rule(name: str) -> None:
+    with pytest.raises(ValidationError, match="1 to 32 lower-case letters"):
+        layout.validate_accelerator(name)
+
+
+@pytest.mark.parametrize("value", [0, 1, 1024])
+def test_share_limits_from_zero_to_1024_are_accepted(value: int) -> None:
+    assert layout.validate_share_limit(value, "h200") == value
+
+
+@pytest.mark.parametrize("value", [-1, 2000, 1025, True, 1.0])
+def test_share_limits_outside_the_range_are_refused_with_the_range(value: object) -> None:
+    with pytest.raises(ValidationError, match="from 0 to 1024"):
+        layout.validate_share_limit(value, "h200")
+
+
+def test_a_profile_holds_at_most_sixteen_types() -> None:
+    sixteen = {f"t{number:02d}": 1 for number in range(16)}
+    assert len(layout.validate_share_queue(sixteen)) == 16
+    seventeen = {f"t{number:02d}": 1 for number in range(17)}
+    with pytest.raises(ValidationError, match="at most 16"):
+        layout.validate_share_queue(seventeen)
+
+
+def test_a_type_given_twice_after_folding_is_refused() -> None:
+    with pytest.raises(ValidationError, match="more than once"):
+        layout.validate_share_pairs([("h200", 1), ("H200", 2)])
