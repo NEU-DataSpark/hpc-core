@@ -44,6 +44,15 @@ def standin_reader(text: str) -> tuple[list[dict[str, str]], int]:
     return rows, skipped
 
 
+def standin_job_reader(job_id: str, text: str) -> tuple[list[dict[str, str]], int]:
+    """The rows of one job from a report, read by the stand-in above.
+
+    The skipped count is the whole report's, so a multi-job report with no unreadable row gives 0.
+    """
+    rows, skipped = standin_reader(text)
+    return [row for row in rows if row["job_id"] == job_id], skipped
+
+
 def _cell(value: object) -> str:
     if value is None:
         return ""

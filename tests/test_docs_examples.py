@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 
 from hpc_core.contract.report import COLUMNS
+from hpc_core.testing import load_cases
 
 REPO = Path(__file__).resolve().parent.parent
 DOCS = REPO / "docs"
@@ -40,3 +41,11 @@ def test_consumer_examples_name_the_stand_in_modules() -> None:
     text = (DOCS / "consumer-contract-test.md").read_text(encoding="utf-8")
     assert "from consumer_standins import standin_reader" in text
     assert "from consumer_standins import standin_writer" in text
+    assert "from consumer_standins import standin_job_reader" in text
+    assert "job_reader=standin_job_reader" in text
+
+
+def test_documented_reader_counts_are_the_golden_case_count() -> None:
+    text = (DOCS / "consumer-contract-test.md").read_text(encoding="utf-8")
+    counts = {int(count) for count in re.findall(r"check_reader\([^)]*\) == (\d+)", text)}
+    assert counts == {len(load_cases("report"))} == {8}

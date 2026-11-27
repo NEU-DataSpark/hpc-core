@@ -30,6 +30,7 @@ KINDS: tuple[str, ...] = ("report", "scheduler")
 
 PROFILES: dict[tuple[str, str], FieldProfile] = {
     ("squeue", "operator-sampling"): squeue.OPERATOR_SAMPLING,
+    ("squeue", "console-monitor"): squeue.CONSOLE_MONITOR,
     ("sacct", "operator-sampling"): sacct.OPERATOR_SAMPLING,
     ("sacct", "console-monitor"): sacct.CONSOLE_MONITOR,
     ("sinfo", "capacity"): sinfo.CAPACITY,
@@ -101,12 +102,22 @@ def load_case(kind: str, name: str) -> Case:
     raise KeyError(f"no {kind} case named {name!r}")
 
 
+# Record fields added in 0.2.0. A record leaves one of these out of its JSON when it is unset,
+# so the golden files written before they existed stay byte-identical. Other fields keep
+# their nulls.
+OMITTED_WHEN_UNSET: frozenset[str] = frozenset({"node_count", "dependency_text", "command"})
+
+
 def to_json_value(value: object) -> object:
     """A JSON-ready form of a record: times in the report's UTC ``Z`` form, dataclasses as dicts."""
     if isinstance(value, datetime):
         return format_time(value)
     if is_dataclass(value) and not isinstance(value, type):
-        return {item.name: to_json_value(getattr(value, item.name)) for item in fields(value)}
+        return {
+            item.name: to_json_value(getattr(value, item.name))
+            for item in fields(value)
+            if not (item.name in OMITTED_WHEN_UNSET and getattr(value, item.name) is None)
+        }
     if isinstance(value, tuple | list):
         return [to_json_value(item) for item in value]
     return value

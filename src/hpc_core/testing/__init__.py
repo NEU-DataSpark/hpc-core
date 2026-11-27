@@ -5,6 +5,7 @@ transport.
 
 from .contract import (
     ContractFailure,
+    JobReader,
     canonical_samples,
     check_reader,
     check_writer,
@@ -17,6 +18,7 @@ from .fixtures import load_case, load_cases
 __all__ = [
     "ContractFailure",
     "FakeTransport",
+    "JobReader",
     "canonical_samples",
     "check_reader",
     "check_writer",
