@@ -1,0 +1,18 @@
+# Loopback NFS server for the opt-in NFS layer (L5). Fictional data only: the export holds nothing
+# but what the tests write under a per-run folder. The port is bound to the loopback address that
+# run.sh sets in NFS_TESTBED_BIND, never to a network interface. The kernel NFS server needs
+# privileges, so the container runs privileged.
+name: hpc-core-nfs-testbed
+
+services:
+  nfs:
+    image: erichough/nfs-server:latest
+    container_name: hpc-core-nfs-testbed
+    privileged: true
+    environment:
+      NFS_EXPORT_0: "/exports *(rw,sync,no_subtree_check,no_root_squash,insecure,fsid=0)"
+    volumes:
+      - ./export:/exports
+    ports:
+      - "${NFS_TESTBED_BIND:?run.sh sets this to the loopback address}:2049:2049"
+    restart: "no"
