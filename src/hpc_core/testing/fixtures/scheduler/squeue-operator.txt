@@ -1,0 +1,8 @@
+# recorded: none (synthetic example in the recording format; not taken from a cluster)
+# slurm: not recorded
+# command: squeue -o '%i|%P|%T|%V|%S|%C|%b|%r|%j'
+100001|short|PENDING|2026-01-05T01:00:00|Unknown|1|gpu:a100:2|Priority|sample-job
+100002|short|RUNNING|2026-01-05T00:00:00|2026-01-05T00:05:30|8|gpu:a100:1|None|sample-run
+100003_3|gpu|PENDING|2026-01-05T01:10:00|Unknown|4|N/A|Resources|sample-step
+100004|gpu|PENDING|2026-01-05T01:11:00|N/A|2|N/A|Dependency|sample|pipe|name
+100005|gpu|PENDING

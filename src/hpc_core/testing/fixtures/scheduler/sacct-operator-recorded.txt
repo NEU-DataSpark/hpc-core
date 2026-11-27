@@ -1,0 +1,11 @@
+# recorded: 2026-11 (read-only; TZ=UTC; times moved to 2026-01-05, spacing kept)
+# slurm: 23.11.6
+# command: sacct -n -P -X --format=JobID,Partition,State,Submit,Start,End,AllocCPUS,AllocTRES,TotalCPU,MaxRSS,JobName --delimiter='|'
+100001|shared-part|COMPLETED|2026-01-05T00:00:00|2026-01-05T00:50:43|2026-01-05T01:31:22|8|billing=108,cpu=8,gres/gpu=1,mem=48G,node=1|00:00:00||job-f
+100002|quick-part|COMPLETED|2026-01-06T19:43:53|2026-01-06T19:44:09|2026-01-06T19:45:16|1|billing=1,cpu=1,mem=32G,node=1|00:00:00||job-g
+100003|shared-part|CANCELLED by 1234|2026-01-06T00:13:18|None|2026-01-06T00:27:49|0||00:00:00||job-f
+100004|quick-part|CANCELLED by 1234|2026-01-07T03:19:41|2026-01-07T03:29:16|2026-01-07T03:29:19|16|billing=16,cpu=16,mem=16G,node=1|00:00:00||job-h
+100005|shared-part|FAILED|2026-01-06T20:52:25|2026-01-06T20:54:25|2026-01-06T20:54:32|8|billing=108,cpu=8,gres/gpu=1,mem=48G,node=1|00:00:00||job-i
+100006|shared-part|TIMEOUT|2026-01-05T04:08:15|2026-01-05T04:18:11|2026-01-05T05:18:31|8|billing=108,cpu=8,gres/gpu=1,mem=48G,node=1|00:00:00||job-f
+100007|shared-part|RUNNING|2026-01-12T00:37:02|2026-01-12T01:23:23|Unknown|8|billing=108,cpu=8,gres/gpu=1,mem=64G,node=1|00:00:00||job-d
+100008|gpu-part-a|PENDING|2026-01-11T20:35:34|Unknown|Unknown|0||00:00:00||job-a

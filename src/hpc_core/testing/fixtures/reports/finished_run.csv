@@ -1,0 +1,4 @@
+schema_version,job_id,job_name,partition,stage,sample_time,scheduler_state,submit_time,start_time,end_time,wait_seconds,elapsed_seconds,cpus_alloc,cpu_seconds_used,mem_peak_mb,gpus_alloc,gpu_type,gpu_util_pct,gpu_mem_mb,source,unavailable,report_status
+1,4812201,sample-job,short,pre,2026-01-05T09:01:00Z,PENDING,2026-01-05T09:00:00Z,,,,,,,,,,,,squeue,,in_progress
+1,4812201,sample-job,short,running,2026-01-05T09:30:00Z,RUNNING,2026-01-05T09:00:00Z,2026-01-05T09:05:30Z,,330,1470,8,1200,1900.5,0,,,,squeue+sstat,,in_progress
+1,4812201,sample-job,short,post,2026-01-05T10:00:00Z,COMPLETED,2026-01-05T09:00:00Z,2026-01-05T09:05:30Z,2026-01-05T10:00:00Z,330,3270,8,93784.5,2048,0,,,,sacct,,complete

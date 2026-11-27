@@ -1,0 +1,6 @@
+{
+  "command": "sacct",
+  "profile": "operator-sampling",
+  "records": [],
+  "skipped": 0
+}

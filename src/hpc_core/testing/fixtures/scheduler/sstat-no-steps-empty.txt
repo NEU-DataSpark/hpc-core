@@ -1,0 +1,4 @@
+# recorded: 2026-11 (read-only; TZ=UTC; times moved to 2026-01-05, spacing kept)
+# slurm: 23.11.6
+# command: sstat -n -P -a --jobs=<running job> --format=JobID,AveCPU,NTasks,MaxRSS
+# note: the job had no running step when recorded, so the output is empty

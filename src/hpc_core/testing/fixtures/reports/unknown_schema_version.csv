@@ -1,0 +1,2 @@
+schema_version,job_id,job_name,partition,stage,sample_time,scheduler_state,submit_time,start_time,end_time,wait_seconds,elapsed_seconds,cpus_alloc,cpu_seconds_used,mem_peak_mb,gpus_alloc,gpu_type,gpu_util_pct,gpu_mem_mb,source,unavailable,report_status
+99,4812209,sample-future,short,post,2026-01-05T10:10:00Z,,,,,,,,,,,,,,sacct,,complete

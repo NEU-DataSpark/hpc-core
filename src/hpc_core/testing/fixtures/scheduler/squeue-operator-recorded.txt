@@ -1,0 +1,8 @@
+# recorded: 2026-11 (read-only; TZ=UTC; times moved to 2026-01-05, spacing kept)
+# slurm: 23.11.6
+# command: squeue -o '%i|%P|%T|%V|%S|%C|%b|%r|%j'
+100001|gpu-part-a|PENDING|2026-01-05T00:00:00|N/A|8|gres/gpu:h200:1|Priority|job-a
+100003|gpu-part-a|PENDING|2026-01-05T00:00:02|N/A|8|gres/gpu:h200:1|Dependency|job-c
+100002|gpu-part-a|PENDING|2026-01-05T00:00:01|N/A|8|gres/gpu:h200:1|Dependency|job-b
+100004|shared-part|RUNNING|2026-01-05T04:01:28|2026-01-05T04:47:49|8|gres/gpu:h200:1|None|job-d
+100005|quick-part|PENDING|2026-01-05T04:01:30|N/A|16|N/A|Dependency|job-e

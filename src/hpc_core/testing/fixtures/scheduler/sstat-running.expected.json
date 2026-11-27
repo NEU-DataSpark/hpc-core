@@ -1,0 +1,31 @@
+{
+  "command": "sstat",
+  "profile": "running-usage",
+  "records": [
+    {
+      "step_id": "100001.0",
+      "ave_cpu_seconds": 600.0,
+      "ntasks": 4,
+      "max_rss_mib": 2.0
+    },
+    {
+      "step_id": "100001.batch",
+      "ave_cpu_seconds": 5.0,
+      "ntasks": 1,
+      "max_rss_mib": 512.0
+    },
+    {
+      "step_id": "100001.extern",
+      "ave_cpu_seconds": 0.0,
+      "ntasks": 1,
+      "max_rss_mib": null
+    },
+    {
+      "step_id": "100001_3.0",
+      "ave_cpu_seconds": 20.0,
+      "ntasks": 2,
+      "max_rss_mib": null
+    }
+  ],
+  "skipped": 0
+}
