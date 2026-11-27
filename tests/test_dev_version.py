@@ -19,9 +19,7 @@ def test_development_versions_order_runs_and_attempts() -> None:
     ("version", "run_number", "attempt"),
     [("0.1.0.dev1", 1, 1), ("0.01.0", 1, 1), ("0.1.0", 0, 1), ("0.1.0", 1, 1000)],
 )
-def test_invalid_version_or_run_metadata_fails(
-    version: str, run_number: int, attempt: int
-) -> None:
+def test_invalid_version_or_run_metadata_fails(version: str, run_number: int, attempt: int) -> None:
     with pytest.raises(ValueError):
         development_version(version, run_number, attempt)
 
