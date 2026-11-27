@@ -15,9 +15,19 @@ The package uses semantic versioning, `MAJOR.MINOR.PATCH`.
   internal detail and may change in any release.
 - **Test kit.** `hpc_core.testing` is not part of the public API. Its names and fixture files may
   change in any release, and each change to a golden case is listed in the release notes.
+- **Command-line surface.** The commands, sub-commands and options of `hpc-core` are public API.
+  They are pinned in `tests/snapshots/cli_surface.txt`. Removing or renaming one is a major release;
+  adding one is a minor release. The skills shipped with the package follow the same version.
 
 ## Version notes
 
+- **Unreleased, planned for 0.3.0** (minor, additive). Adds the `hpc-core` command and
+  `python -m hpc_core`, with the `parse`, `report`, `commands` and `skills` groups, and the two
+  skills `hpc-scheduler-output` and `hpc-run-report` in the package and the wheel. The `cli` layer
+  is new; the contract, transport and slurm layers, the public names and the run-report schema are
+  unchanged, so nothing is removed or renamed. The version in `pyproject.toml` stays at 0.2.0
+  until the release that carries this change sets it to 0.3.0, together with the skills'
+  `metadata.version`.
 - **0.2.0** (minor, additive). Adds `squeue.CONSOLE_MONITOR`, the extended job id rule
   (`is_extended_job_id`, `validate_extended_job_id`), and the `JobRecord` fields `node_count`,
   `dependency_text` and `command`, which are keyword-only and unset unless a profile names them.
