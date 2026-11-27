@@ -44,6 +44,8 @@ hpc-core cluster limits
 hpc-core cluster nodes
   --root ROOT (required)
   --verbose
+hpc-core cluster profiles
+  --file PATH (required)
 hpc-core cluster send
   --root ROOT (required)
   --verbose

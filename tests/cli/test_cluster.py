@@ -283,3 +283,102 @@ def test_leave_from_a_later_process_cannot_remove_an_earlier_record(
     )
     assert code == 1 and out == ""
     assert "belongs to another instance" in err
+
+
+# ``cluster profiles``: read a profile set file, open no team folder (task 1.7)
+
+
+def _write(tmp_path: Path, document: object, name: str = "profiles.json") -> str:
+    path = tmp_path / name
+    path.write_text(json.dumps(document), encoding="utf-8")
+    return str(path)
+
+
+def test_profiles_prints_mode_and_entries_with_their_node_ids(
+    run_cli: RunCli, tmp_path: Path
+) -> None:
+    path = _write(
+        tmp_path,
+        {
+            "mode": "multi",
+            "profiles": [
+                {"profile_id": "alice", "node_id": "alice-a1", "share_queue": "h200=1"},
+                {"profile_id": "bob", "node_id": "bob-b1", "enabled": False},
+            ],
+        },
+    )
+    code, out, err = run_cli("cluster", "profiles", "--file", path)
+    assert code == 0 and err == ""
+    document = json.loads(out)
+    assert document["mode"] == "multi"
+    assert [
+        (row["profile_id"], row["node_id"], row["enabled"]) for row in document["profiles"]
+    ] == [
+        ("alice", "alice-a1", True),
+        ("bob", "bob-b1", False),
+    ]
+    assert document["profiles"][0]["share_queue"] == {"h200": 1}
+
+
+def test_profiles_reports_a_single_entry_as_enabled_even_when_the_file_says_otherwise(
+    run_cli: RunCli, tmp_path: Path
+) -> None:
+    path = _write(tmp_path, {"profiles": [{"profile_id": "alice", "enabled": False}]})
+    code, out, _ = run_cli("cluster", "profiles", "--file", path)
+    assert code == 0
+    row = json.loads(out)["profiles"][0]
+    assert json.loads(out)["mode"] == "single"
+    assert row["enabled"] is True and row["node_id"]
+
+
+def test_a_refused_profile_file_exits_1_and_prints_no_entries(
+    run_cli: RunCli, tmp_path: Path
+) -> None:
+    path = _write(
+        tmp_path,
+        {
+            "mode": "multi",
+            "profiles": [
+                {"profile_id": "alice", "node_id": "same"},
+                {"profile_id": "bob", "node_id": "same"},
+            ],
+        },
+    )
+    code, out, err = run_cli("cluster", "profiles", "--file", path)
+    assert code == 1 and out == ""
+    assert "same" in err
+
+
+def test_a_profile_file_with_two_entries_in_single_mode_is_refused(
+    run_cli: RunCli, tmp_path: Path
+) -> None:
+    path = _write(
+        tmp_path, {"mode": "single", "profiles": [{"profile_id": "a"}, {"profile_id": "b"}]}
+    )
+    code, out, err = run_cli("cluster", "profiles", "--file", path)
+    assert code == 1 and out == ""
+    assert "single" in err and "2" in err
+
+
+def test_profiles_reads_standard_input_with_a_dash(
+    run_cli: RunCli, feed_stdin: Callable[[str], None]
+) -> None:
+    feed_stdin(json.dumps({"mode": "multi", "profiles": [{"profile_id": "alice"}]}))
+    code, out, _ = run_cli("cluster", "profiles", "--file", "-")
+    assert code == 0
+    assert json.loads(out)["profiles"][0]["profile_id"] == "alice"
+
+
+def test_profiles_takes_no_team_folder(run_cli: RunCli, tmp_path: Path) -> None:
+    # The command opens no folder, so it has no --root; passing one is a usage error.
+    path = _write(tmp_path, {"profiles": [{"profile_id": "alice"}]})
+    before = _tree(str(tmp_path))
+    code, _, _ = run_cli("cluster", "profiles", "--root", str(tmp_path), "--file", path)
+    assert code == 2
+    assert _tree(str(tmp_path)) == before
+
+
+def test_an_unreadable_profile_file_exits_2(run_cli: RunCli, tmp_path: Path) -> None:
+    code, out, err = run_cli("cluster", "profiles", "--file", str(tmp_path / "missing.json"))
+    assert code == 2 and out == ""
+    assert "cannot read input file" in err

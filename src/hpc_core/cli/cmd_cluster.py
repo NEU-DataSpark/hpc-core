@@ -1,7 +1,8 @@
 """``hpc-core cluster``: the team folder protocol from the command line.
 
-Every subcommand takes ``--root``, the team folder (a mounted or on-cluster path). Data goes to
-standard output as JSON; ``--verbose`` writes the coordination events to standard error, once for
+Every subcommand except ``profiles`` takes ``--root``, the team folder (a mounted or on-cluster
+path). ``profiles`` reads a profile set file and opens no folder. Data goes to standard output as
+JSON; ``--verbose`` writes the coordination events to standard error, once for
 the event lines and twice for debug detail. Exit status: 0 for success, 1 when the folder cannot be
 used or a rule refuses the change (a live duplicate id, an unknown recipient, a lease the node does
 not hold), and 2 for a bad argument such as an invalid id. Error text never names the ``--root``
@@ -26,6 +27,7 @@ from ..coordination import check, events, layout
 from ..coordination.limits import set_limit, set_share_queue, usage
 from ..coordination.messages import SendRefused, acknowledge, pending, send
 from ..coordination.profile import parse_share_queue, resolve
+from ..coordination.profile_mode import parse_profile_set
 from ..coordination.records import KINDS, ProfileRecord, Unreadable, decode_node, decode_profile
 from ..coordination.registry import (
     OUTCOME_CONFLICT,
@@ -299,6 +301,29 @@ def check_run(args: argparse.Namespace) -> int:
     return EXIT_OK if clean else EXIT_UNACCEPTABLE
 
 
+def profiles_run(args: argparse.Namespace) -> int:
+    """Read a profile set file and print its mode and entries. No team folder is opened, and a
+    refused set prints nothing on standard output. An entry's ``enabled`` is the effective value:
+    every entry of a single-mode set is active."""
+    try:
+        profile_set = parse_profile_set(read_text(args.file))
+    except ValidationError as error:
+        return fail(str(error), EXIT_UNACCEPTABLE)
+    rows = [
+        {
+            "profile_id": entry.profile_id,
+            "node_id": entry.node_id,
+            "display_name": entry.display_name,
+            "share_queue": entry.share_queue,
+            "concurrency_limit": entry.concurrency_limit,
+            "enabled": profile_set.is_active(entry),
+        }
+        for entry in profile_set.entries
+    ]
+    print_json({"mode": profile_set.mode, "profiles": rows})
+    return EXIT_OK
+
+
 def _common(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--root", required=True, help="the team folder (a mounted or cluster path)")
     parser.add_argument(
@@ -424,3 +449,16 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
     check_cmd.add_argument(
         "--read-only", action="store_true", help="skip the write probe; read only"
     )
+
+    # No --root: this command validates a profile set file and never opens a team folder.
+    profiles = sub.add_parser(
+        "profiles",
+        help="Read a profile set file and print its mode and entries; no team folder is opened.",
+    )
+    profiles.add_argument(
+        "--file",
+        required=True,
+        metavar="PATH",
+        help="a JSON profile set (mode and profiles), or - for standard input",
+    )
+    profiles.set_defaults(handler=profiles_run)
