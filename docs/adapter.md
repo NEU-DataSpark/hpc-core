@@ -94,3 +94,81 @@ A transport implements `CommandTransport.run(argv, *, timeout, max_output_bytes)
 `CommandResult`. It must run the tuple as given, with no shell, and must report a timeout as
 `TransportTimeout` and an unreachable node as `TransportError`. The package checks this interface
 with a `mypy --strict` test that rejects a class taking a shell string.
+
+## Wire contract
+
+A transport that sends a command to a separate executor must send and read the same JSON as every
+other client and the executor. `hpc_core.transport` defines that contract once, as pure code with no
+I/O. The shapes are below; each object is written with sorted keys and no spaces, so one value has
+one text.
+
+**Request**, `POST` to the path `COMMANDS_PATH` (`/v1/commands`, the protocol version is
+`PROTOCOL_VERSION`, 1). `argv` is a non-empty list of strings, never a shell string. `timeout` is a
+positive number of seconds. `max_output_bytes` is a positive whole number. `input` is a string of at
+most 64 KiB, or `null`.
+
+```json
+{"argv":["env","TZ=UTC","squeue","--noheader"],"input":null,"max_output_bytes":65536,"timeout":30.0}
+```
+
+**Result**, for a command that finished, whatever its exit status. `truncated` is `true` when the
+output reached `max_output_bytes`.
+
+```json
+{"exit_status":0,"stderr":"","stdout":"1|alice\n","truncated":false}
+```
+
+**Error**, for a failure with no result. `kind` names one error kind, and `message` is short and holds
+no key path, token, command input or raw standard error.
+
+```json
+{"kind":"timeout","message":"the command did not finish in time"}
+```
+
+| Error kind | HTTP status | `raise_for_error` raises |
+| --- | --- | --- |
+| `timeout` | 504 | `TransportTimeout` |
+| `input_too_large` | 413 | `InputTooLarge` |
+| `busy` | 503 | `TransportError` |
+| `unauthorized` | 401 | `TransportError` |
+| `invalid` | 422 | `TransportError` |
+| `connection` | 502 | `TransportError` |
+
+A kind the package does not know raises `TransportError`, so a newer executor does not break an older
+client. An unknown or missing field, a value of the wrong type, an empty argument list or a non-string
+argument is refused with `WireFormatError` and nothing runs. A standard-input text over 64 KiB is
+refused with `InputTooLarge`, both when a request is built and when one is read, so the limit holds on
+both sides.
+
+The functions are `encode_request`, `decode_request`, `encode_result`, `decode_result`,
+`encode_error`, `decode_error` and `raise_for_error`. The example below builds a request, reads it
+back, and raises the exception for a timeout:
+
+```python
+from hpc_core.transport import (
+    CommandRequest,
+    ErrorBody,
+    TransportTimeout,
+    decode_request,
+    encode_error,
+    encode_request,
+    raise_for_error,
+)
+
+request = CommandRequest(
+    argv=("env", "TZ=UTC", "squeue", "--noheader"), timeout=30, max_output_bytes=65536
+)
+assert decode_request(encode_request(request)) == request
+
+try:
+    raise_for_error(encode_error(ErrorBody(kind="timeout", message="the command timed out")))
+except TransportTimeout:
+    pass
+else:
+    raise AssertionError("a timeout must raise TransportTimeout")
+```
+
+A client or an executor that reads and writes these shapes proves it with the golden examples in
+`hpc_core.testing`: `check_wire_conformance(codec)` returns the list of disagreements for a
+`WireCodec`, and an empty list means the codec conforms. `REFERENCE_WIRE_CODEC` is the package's own
+codec.

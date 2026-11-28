@@ -28,6 +28,14 @@ The package uses semantic versioning, `MAJOR.MINOR.PATCH`.
 
 ## Version notes
 
+- **0.7.0** (minor, additive). Adds the JSON wire contract for one command sent to an executor, in
+  `hpc_core.transport`: the request, result and error shapes (`CommandRequest`, `ErrorBody`,
+  `encode_request`, `decode_request`, `encode_result`, `decode_result`, `encode_error`,
+  `decode_error`), the error kinds (`ErrorKind`), the HTTP status of each kind (`STATUS_BY_KIND`),
+  the protocol version and path (`PROTOCOL_VERSION`, `COMMANDS_PATH`), `raise_for_error` and
+  `WireFormatError`. `InputTooLarge` is now exported from `hpc_core.transport` as well. The test
+  kit gains `check_wire_conformance`, `WireCodec` and `REFERENCE_WIRE_CODEC`. Nothing is removed or
+  renamed. `pyproject.toml` and the skills' `metadata.version` are set to 0.7.0 with this change.
 - **0.6.0** (minor, additive). Adds shared datasets: the `shared` folder with one file per dataset
   (`shared/<dataset>.txt`), the optional node field `shared_collector`, and the envelope
   `SharedRecord` at record `schema_version` 1. The `hpc_core.coordination` names are new

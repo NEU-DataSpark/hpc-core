@@ -15,13 +15,24 @@ formats again, and duplicate them.
 | Layer | Package | Responsibility | I/O |
 | --- | --- | --- | --- |
 | Contract | `hpc_core.contract` | Scheduler output parsing (`squeue`, `sacct`, `sinfo`, `sstat`), the run-report CSV schema and its `schema_version`, metric calculations | None. Standard library only |
-| Transport | `hpc_core.transport` | A small interface to run a fixed command on the login node: argument tuple, timeout, output limit, exit status | Yes, one implementation per consumer |
+| Transport | `hpc_core.transport` | A small interface to run a fixed command on the login node: argument tuple, timeout, output limit, exit status. The JSON wire contract for sending that command to an executor | Yes, one implementation per consumer. The wire contract is pure: no I/O |
 | Scheduler adapter | `hpc_core.slurm` | Builds the fixed, read-only Slurm commands and passes their output to the contract layer | Through the transport interface |
 | Command line | `hpc_core.cli` | The `hpc-core` command: parses recorded output, checks run reports, prints fixed commands, installs the skills | Files and standard input only; never a connection |
-| Test kit | `hpc_core.testing` | Anonymised scheduler fixtures, golden run-reports, reader and writer contract checks, a fake transport | None |
+| Test kit | `hpc_core.testing` | Anonymised scheduler fixtures, golden run-reports, reader and writer contract checks, golden wire examples and their conformance check, a fake transport | None |
 
 Consumers keep their own transport implementation: the operator skill uses the `ssh` command, and
 the HPC Console uses `paramiko`. This package contains neither.
+
+## Wire contract
+
+A client that sends one command to an executor uses the shapes in `hpc_core.transport.wire`, so
+every client and the executor read and write the same JSON. A request is an argument list (never
+a shell string), a timeout, an output limit and an optional standard input of at most 64 KiB. A
+result holds the output, the exit status and whether the output was truncated. A failure with no
+result names one error kind: `timeout` raises `TransportTimeout`, `input_too_large` raises
+`InputTooLarge`, and every other kind raises `TransportError`. The path carries the protocol
+version, `/v1/commands`. The shapes, the status of each error kind and the conformance check are
+in [`docs/adapter.md`](docs/adapter.md#wire-contract).
 
 ## Install
 
