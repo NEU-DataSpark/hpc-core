@@ -38,6 +38,13 @@ from ..coordination.registry import (
     init_layout,
     reset_node_profile,
 )
+from ..coordination.shared import (
+    SharedCopy,
+    SharedMissing,
+    elect_collector,
+    read_shared,
+    shared_ages,
+)
 from ..coordination.store import FolderStore, LocalFolderStore, NotFound, StoreError
 from ._io import EXIT_OK, EXIT_UNACCEPTABLE, InputError, fail, print_json, read_text
 
@@ -161,6 +168,38 @@ def nodes_run(args: argparse.Namespace) -> int:
     ]
     print_json({"nodes": rows, "unreadable": found.unreadable})
     return EXIT_OK
+
+
+def collector_run(args: argparse.Namespace) -> int:
+    """The elected collector node, or null, and the age of each shared file. Read only."""
+    store = _open_set_up(args)
+    collector = elect_collector(discover(store))
+    ages = shared_ages(store)
+    shared = [{"dataset": dataset, "age_seconds": int(ages[dataset])} for dataset in sorted(ages)]
+    print_json({"collector_node_id": collector, "shared": shared})
+    return EXIT_OK
+
+
+def shared_run(args: argparse.Namespace) -> int:
+    """One shared dataset: its payload, age and collector. Read only. A missing dataset is a
+    normal answer (status missing, exit 0); an unreadable file is refused (exit 1)."""
+    store = _open_set_up(args)
+    result = read_shared(store, args.dataset)
+    if isinstance(result, SharedMissing):
+        print_json({"dataset": args.dataset, "status": "missing"})
+        return EXIT_OK
+    if isinstance(result, SharedCopy):
+        print_json(
+            {
+                "dataset": result.dataset,
+                "status": "present",
+                "collector_node_id": result.collector_node_id,
+                "age_seconds": int(result.age_seconds),
+                "payload": result.payload,
+            }
+        )
+        return EXIT_OK
+    return fail(f"the shared file is unreadable ({result.reason})", EXIT_UNACCEPTABLE)
 
 
 def beat_run(args: argparse.Namespace) -> int:
@@ -334,6 +373,14 @@ def _common(parser: argparse.ArgumentParser) -> None:
     )
 
 
+def _dataset_arg(text: str) -> str:
+    """A shared dataset name. A bad name is a usage error (exit 2), named by its rule."""
+    try:
+        return layout.validate_dataset(text)
+    except ValidationError as error:
+        raise argparse.ArgumentTypeError(str(error)) from None
+
+
 def _node(parser: argparse.ArgumentParser, *, required_kind: bool) -> None:
     parser.add_argument("--node-id", required=True, help="this node's id, such as alice-console-a1")
     parser.add_argument("--profile", required=True, help="the profile the node draws slots from")
@@ -441,6 +488,27 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
         "--reset-node",
         action="store_true",
         help="remove a node's explicit values so it follows the account quota; needs --node-id",
+    )
+
+    _add(
+        sub,
+        "collector",
+        "Show the elected shared-data collector and the age of each shared file (read only).",
+        _guarded(collector_run),
+    )
+
+    shared = _add(
+        sub,
+        "shared",
+        "Show one shared dataset: payload, age and collector (read only).",
+        _guarded(shared_run),
+    )
+    shared.add_argument(
+        "--dataset",
+        required=True,
+        type=_dataset_arg,
+        metavar="NAME",
+        help="the shared dataset, such as queue or physical",
     )
 
     check_cmd = _add(

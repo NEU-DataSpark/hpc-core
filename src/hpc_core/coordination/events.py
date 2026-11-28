@@ -32,6 +32,9 @@ MESSAGE_REFUSED: Final = "message.refused"
 MESSAGE_ACKED: Final = "message.acked"
 RECORD_UNREADABLE: Final = "record.unreadable"
 STORE_ERROR: Final = "store.error"
+SHARED_PUBLISHED: Final = "shared.published"
+SHARED_READ_FAILED: Final = "shared.read_failed"
+SHARED_COLLECTOR_CHANGED: Final = "shared.collector_changed"
 
 EVENTS: Final[frozenset[str]] = frozenset(
     {
@@ -51,6 +54,9 @@ EVENTS: Final[frozenset[str]] = frozenset(
         MESSAGE_ACKED,
         RECORD_UNREADABLE,
         STORE_ERROR,
+        SHARED_PUBLISHED,
+        SHARED_READ_FAILED,
+        SHARED_COLLECTOR_CHANGED,
     }
 )
 
@@ -63,6 +69,7 @@ _LEVELS: Final[dict[str, int]] = {
     MESSAGE_REFUSED: logging.WARNING,
     RECORD_UNREADABLE: logging.WARNING,
     STORE_ERROR: logging.WARNING,
+    SHARED_READ_FAILED: logging.WARNING,
 }
 
 _PATH_LIKE = re.compile(r"[/\\]|^~|\.\.|=|://")

@@ -95,6 +95,8 @@ class NodeIdentity:
     # The node's explicit share-queue values. None means keep whatever the node's own record
     # already holds (an empty mapping counts as None); the account quota is never set here.
     node_quota: dict[str, int] | None = None
+    # True when this node can reach the scheduler and may collect shared datasets (see shared.py).
+    shared_collector: bool = False
 
     def __post_init__(self) -> None:
         layout.validate_id(self.node_id, "node id")
@@ -102,6 +104,8 @@ class NodeIdentity:
         check_kind(self.kind)
         check_interval(self.interval_seconds)
         layout.validate_limit(self.concurrency_limit)
+        if not isinstance(self.shared_collector, bool):
+            raise ValidationError("shared collector mark must be true or false")
         if self.node_quota is not None:
             folded = validate_share_queue(dict(self.node_quota))
             object.__setattr__(self, "node_quota", folded or None)
@@ -276,6 +280,7 @@ class NodeSession:
             share_queue_limits=resolved.effective,
             node_quota=resolved.node_quota,
             profile_source=resolved.source,
+            shared_collector=identity.shared_collector,
         )
 
     def _failure(self, error: StoreError, during: str) -> BeatResult:

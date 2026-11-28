@@ -19,7 +19,8 @@
       "instance_token",
       "share_queue_limits",
       "node_quota",
-      "profile_source"
+      "profile_source",
+      "shared_collector"
     ],
     "profile": [
       "schema_version",
@@ -48,6 +49,12 @@
       "expires_at",
       "in_reply_to",
       "body"
+    ],
+    "shared": [
+      "schema_version",
+      "dataset",
+      "collector_node_id",
+      "payload"
     ]
   }
 }

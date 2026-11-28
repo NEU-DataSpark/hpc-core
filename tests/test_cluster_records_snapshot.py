@@ -16,6 +16,7 @@ LIVE_TYPES = {
     "profile": records.ProfileRecord,
     "lease": records.LeaseRecord,
     "message": records.MessageRecord,
+    "shared": records.SharedRecord,
 }
 
 

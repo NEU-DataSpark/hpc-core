@@ -8,6 +8,10 @@ from pathlib import Path
 
 import pytest
 
+from hpc_core.coordination.registry import NodeIdentity, NodeSession
+from hpc_core.coordination.shared import publish_shared
+from hpc_core.coordination.store import LocalFolderStore
+
 RunCli = Callable[..., tuple[int, str, str]]
 
 
@@ -382,3 +386,85 @@ def test_an_unreadable_profile_file_exits_2(run_cli: RunCli, tmp_path: Path) -> 
     code, out, err = run_cli("cluster", "profiles", "--file", str(tmp_path / "missing.json"))
     assert code == 2 and out == ""
     assert "cannot read input file" in err
+
+
+# -- shared datasets: read-only commands -------------------------------------------------------
+
+
+def _mark_candidate(root: str, node: str) -> None:
+    """A console that can collect writes its own marked record. The CLI does not set the mark."""
+    identity = NodeIdentity(node, node.split("-", 1)[0], "console", shared_collector=True)
+    assert NodeSession(LocalFolderStore(Path(root)), identity).register().outcome == "registered"
+
+
+def _publish(root: str, dataset: str, node: str, payload: dict[str, object]) -> None:
+    publish_shared(LocalFolderStore(Path(root)), dataset, node_id=node, payload=payload)
+
+
+def test_collector_names_the_elected_candidate_and_the_age_of_each_shared_file(
+    run_cli: RunCli, root: str
+) -> None:
+    _mark_candidate(root, "alice-console-a1")
+    _mark_candidate(root, "bob-console-b2")
+    _publish(root, "queue", "alice-console-a1", {"running": 3})
+    code, out, err = run_cli("cluster", "collector", "--root", root)
+    assert code == 0 and err == ""
+    report = json.loads(out)
+    assert report["collector_node_id"] == "alice-console-a1"
+    assert [(row["dataset"], type(row["age_seconds"]).__name__) for row in report["shared"]] == [
+        ("queue", "int")
+    ]
+
+
+def test_collector_is_null_when_no_candidate_is_online(run_cli: RunCli, root: str) -> None:
+    _beat(run_cli, root, "alice-skill-a1", "alice")
+    code, out, _ = run_cli("cluster", "collector", "--root", root)
+    assert code == 0
+    assert json.loads(out) == {"collector_node_id": None, "shared": []}
+
+
+def test_shared_prints_the_payload_age_and_collector(run_cli: RunCli, root: str) -> None:
+    _publish(root, "queue", "alice-console-a1", {"running": 3})
+    code, out, err = run_cli("cluster", "shared", "--root", root, "--dataset", "queue")
+    assert code == 0 and err == ""
+    body = json.loads(out)
+    assert body["status"] == "present"
+    assert body["collector_node_id"] == "alice-console-a1"
+    assert body["payload"] == {"running": 3}
+    assert isinstance(body["age_seconds"], int) and body["age_seconds"] >= 0
+
+
+def test_a_missing_dataset_is_reported_with_status_zero(run_cli: RunCli, root: str) -> None:
+    code, out, err = run_cli("cluster", "shared", "--root", root, "--dataset", "physical")
+    assert code == 0 and err == ""
+    assert json.loads(out) == {"dataset": "physical", "status": "missing"}
+
+
+def test_an_unreadable_shared_file_exits_1_with_nothing_on_standard_output(
+    run_cli: RunCli, root: str
+) -> None:
+    (Path(root) / "_cluster" / "shared").mkdir()
+    (Path(root) / "_cluster" / "shared" / "queue.txt").write_text("not json", encoding="utf-8")
+    code, out, err = run_cli("cluster", "shared", "--root", root, "--dataset", "queue")
+    assert code == 1 and out == ""
+    assert "unreadable" in err
+
+
+def test_a_bad_dataset_name_is_a_usage_error_that_names_the_rule(
+    run_cli: RunCli, root: str
+) -> None:
+    code, out, err = run_cli("cluster", "shared", "--root", root, "--dataset", "../x")
+    assert code == 2 and out == ""
+    assert "must be 1 to 32" in err
+
+
+def test_the_shared_commands_change_nothing_in_the_folder(run_cli: RunCli, root: str) -> None:
+    _mark_candidate(root, "alice-console-a1")
+    _publish(root, "queue", "alice-console-a1", {"running": 3})
+    before = _tree(root)
+    before_bytes = (Path(root) / "_cluster" / "shared" / "queue.txt").read_bytes()
+    assert run_cli("cluster", "collector", "--root", root)[0] == 0
+    assert run_cli("cluster", "shared", "--root", root, "--dataset", "queue")[0] == 0
+    assert run_cli("cluster", "shared", "--root", root, "--dataset", "physical")[0] == 0
+    assert _tree(root) == before
+    assert (Path(root) / "_cluster" / "shared" / "queue.txt").read_bytes() == before_bytes

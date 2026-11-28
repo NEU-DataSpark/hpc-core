@@ -16,6 +16,7 @@ from ..contract.identifiers import ValidationError
 CLUSTER_FOLDER = "_cluster"
 MANIFEST_NAME = "cluster.json"
 SUBFOLDERS: tuple[str, ...] = ("nodes", "profiles", "leases", "inbox")
+SHARED_FOLDER = "shared"
 DONE_FOLDER = "done"
 TEMP_PREFIX = ".tmp-"
 PROBE_PREFIX = ".probe-"
@@ -34,6 +35,7 @@ NODE_RECORD_LIMIT = 16 * 1024
 PROFILE_RECORD_LIMIT = 16 * 1024
 LEASE_RECORD_LIMIT = 16 * 1024
 MESSAGE_LIMIT = 64 * 1024
+SHARED_RECORD_LIMIT = 1024 * 1024
 
 LIMIT_MIN = 1
 LIMIT_MAX = 1024
@@ -55,6 +57,18 @@ def validate_id(value: str, what: str = "identifier") -> str:
     ):
         raise ValidationError(f"{what} {ID_RULE}")
     return value
+
+
+# A shared dataset name is 1 to 32 lower-case letters, digits or hyphens, starting with a letter.
+DATASET_PATTERN = re.compile(r"[a-z][a-z0-9-]{0,31}")
+DATASET_RULE = "must be 1 to 32 lower-case letters, digits or hyphens, starting with a letter"
+
+
+def validate_dataset(name: object) -> str:
+    """Return the dataset name, or raise ValidationError naming the rule. No case folding."""
+    if not isinstance(name, str) or DATASET_PATTERN.fullmatch(name) is None:
+        raise ValidationError(f"dataset name {DATASET_RULE}")
+    return name
 
 
 def validate_limit(limit: int) -> int:
@@ -140,6 +154,15 @@ def subfolder_path(name: str) -> str:
     if name not in SUBFOLDERS:
         raise ValidationError("unknown cluster sub-folder")
     return f"{CLUSTER_FOLDER}/{name}"
+
+
+def shared_dir() -> str:
+    """The folder of shared datasets. Not in SUBFOLDERS: only the first publish creates it."""
+    return f"{CLUSTER_FOLDER}/{SHARED_FOLDER}"
+
+
+def shared_path(dataset: str) -> str:
+    return f"{shared_dir()}/{validate_dataset(dataset)}.txt"
 
 
 def node_path(node_id: str) -> str:

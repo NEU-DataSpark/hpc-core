@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 
 import pytest
 
@@ -11,20 +12,24 @@ from hpc_core.coordination import layout
 from hpc_core.coordination.records import (
     KINDS,
     REASON_EMPTY,
+    REASON_FIELD,
     REASON_NAME,
     REASON_NOT_JSON,
+    REASON_TOO_LARGE,
     REASON_VERSION,
     ClusterManifest,
     LeaseRecord,
     MessageRecord,
     NodeRecord,
     ProfileRecord,
+    SharedRecord,
     Unreadable,
     decode_lease,
     decode_manifest,
     decode_message,
     decode_node,
     decode_profile,
+    decode_shared,
     encode,
 )
 
@@ -119,3 +124,80 @@ def test_layout_identifier_rule_applies_inside_records() -> None:
     data["profile_id"] = "../alice"
     assert decode_node(json.dumps(data)) == Unreadable("invalid-field")
     assert layout.LIMIT_MAX == 1024
+
+
+def test_a_node_record_without_the_collector_mark_reads_as_not_a_candidate() -> None:
+    text = encode(NODE)  # a node that is not a candidate writes no mark at all
+    assert "shared_collector" not in text
+    decoded = decode_node(text, "alice-console-a1")
+    assert isinstance(decoded, NodeRecord) and decoded.shared_collector is False
+
+
+def test_the_collector_mark_round_trips_as_a_boolean() -> None:
+    marked = replace(NODE, shared_collector=True)
+    decoded = decode_node(encode(marked), "alice-console-a1")
+    assert isinstance(decoded, NodeRecord) and decoded.shared_collector is True
+
+
+@pytest.mark.parametrize("value", ['"yes"', "1", "null", "[true]"])
+def test_a_collector_mark_that_is_not_a_boolean_makes_the_record_unreadable(value: str) -> None:
+    text = encode(NODE).replace("}\n", f',"shared_collector":{value}}}\n')
+    decoded = decode_node(text, "alice-console-a1")
+    assert isinstance(decoded, Unreadable) and decoded.reason == REASON_FIELD
+
+
+def _shared_text(**changes: object) -> str:
+    body = {
+        "schema_version": 1,
+        "dataset": "queue",
+        "collector_node_id": "alice-console-a1",
+        "payload": {"running": 3},
+    }
+    body.update(changes)
+    return json.dumps(body) + "\n"
+
+
+def test_a_shared_envelope_round_trips_with_its_four_fields() -> None:
+    record = SharedRecord(1, "queue", "alice-console-a1", {"running": 3})
+    text = encode(record)
+    assert json.loads(text) == {
+        "schema_version": 1,
+        "dataset": "queue",
+        "collector_node_id": "alice-console-a1",
+        "payload": {"running": 3},
+    }
+    assert decode_shared(text, "queue") == record
+
+
+def test_a_shared_envelope_with_a_non_object_payload_is_unreadable() -> None:
+    decoded = decode_shared(_shared_text(payload=[1, 2]), "queue")
+    assert isinstance(decoded, Unreadable) and decoded.reason == REASON_FIELD
+
+
+def test_a_shared_envelope_with_an_unknown_version_is_unreadable() -> None:
+    decoded = decode_shared(_shared_text(schema_version=2), "queue")
+    assert isinstance(decoded, Unreadable) and decoded.reason == REASON_VERSION
+
+
+def test_a_shared_envelope_for_another_dataset_is_a_name_mismatch() -> None:
+    decoded = decode_shared(_shared_text(), "physical")
+    assert isinstance(decoded, Unreadable) and decoded.reason == REASON_NAME
+
+
+def test_a_shared_envelope_with_an_unsafe_dataset_or_collector_is_unreadable() -> None:
+    assert isinstance(decode_shared(_shared_text(dataset="../x")), Unreadable)
+    bad_collector = decode_shared(_shared_text(collector_node_id="a/b"))
+    assert isinstance(bad_collector, Unreadable) and bad_collector.reason == REASON_FIELD
+
+
+def test_a_shared_file_over_one_mebibyte_is_refused_on_read_and_on_write() -> None:
+    big = _shared_text(payload={"blob": "x" * (1024 * 1024)})
+    decoded = decode_shared(big, "queue")
+    assert isinstance(decoded, Unreadable) and decoded.reason == REASON_TOO_LARGE
+    with pytest.raises(ValidationError, match="1024 KiB limit"):
+        encode(SharedRecord(1, "queue", "alice-console-a1", {"blob": "x" * (1024 * 1024)}))
+
+
+def test_a_shared_payload_that_is_not_json_is_refused_on_write() -> None:
+    with pytest.raises(ValidationError, match="not JSON"):
+        encode(SharedRecord(1, "queue", "alice-console-a1", {"when": object()}))

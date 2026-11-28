@@ -21,8 +21,10 @@ from .layout import (
     MESSAGE_LIMIT,
     NODE_RECORD_LIMIT,
     PROFILE_RECORD_LIMIT,
+    SHARED_RECORD_LIMIT,
     TYPE_PATTERN,
     validate_accelerator,
+    validate_dataset,
     validate_id,
     validate_share_queue,
 )
@@ -84,6 +86,9 @@ class NodeRecord:
     share_queue_limits: dict[str, int] = field(default_factory=dict)
     node_quota: dict[str, int] | None = None
     profile_source: str = SOURCE_DEFAULT
+    # Optional (schema version 1, additive): true when this node may collect shared datasets.
+    # Absent reads as false; a value that is not a boolean makes the record unreadable.
+    shared_collector: bool = False
 
 
 @dataclass(frozen=True)
@@ -122,8 +127,23 @@ class MessageRecord:
     body: dict[str, Any]
 
 
-AnyRecord = ClusterManifest | NodeRecord | ProfileRecord | LeaseRecord | MessageRecord
-R = TypeVar("R", ClusterManifest, NodeRecord, ProfileRecord, LeaseRecord, MessageRecord)
+@dataclass(frozen=True)
+class SharedRecord:
+    """The envelope of one shared dataset file. ``payload`` is opaque to this package: only its
+    type (a JSON object) and the file size are checked here."""
+
+    schema_version: int
+    dataset: str
+    collector_node_id: str
+    payload: dict[str, Any]
+
+
+AnyRecord = (
+    ClusterManifest | NodeRecord | ProfileRecord | LeaseRecord | MessageRecord | SharedRecord
+)
+R = TypeVar(
+    "R", ClusterManifest, NodeRecord, ProfileRecord, LeaseRecord, MessageRecord, SharedRecord
+)
 
 RECORD_LIMITS: dict[type[AnyRecord], int] = {
     NodeRecord: NODE_RECORD_LIMIT,
@@ -131,6 +151,7 @@ RECORD_LIMITS: dict[type[AnyRecord], int] = {
     LeaseRecord: LEASE_RECORD_LIMIT,
     MessageRecord: MESSAGE_LIMIT,
     ClusterManifest: NODE_RECORD_LIMIT,
+    SharedRecord: SHARED_RECORD_LIMIT,
 }
 
 
@@ -155,6 +176,8 @@ def _data(record: AnyRecord) -> dict[str, Any]:
             del data["share_queue_limits"]
         if record.node_quota is None:
             del data["node_quota"]
+        if not record.shared_collector:
+            del data["shared_collector"]
     if isinstance(record, LeaseRecord) and record.accelerator is None:
         del data["accelerator"]
     return data
@@ -164,8 +187,16 @@ def encode(record: AnyRecord) -> str:
     """Compact one-line JSON with a trailing newline. Refuses a record over its size limit."""
     if isinstance(record, (ProfileRecord, NodeRecord)):
         validate_share_queue(dict(record.share_queue_limits))
-    text = json.dumps(_data(record), separators=(",", ":"), sort_keys=True, ensure_ascii=False)
-    text += "\n"
+    if isinstance(record, SharedRecord):
+        validate_dataset(record.dataset)
+        validate_id(record.collector_node_id, "node id")
+        if not isinstance(record.payload, dict):
+            raise ValidationError("shared payload must be a JSON object")
+    try:
+        body = json.dumps(_data(record), separators=(",", ":"), sort_keys=True, ensure_ascii=False)
+    except (TypeError, ValueError) as error:
+        raise ValidationError("record holds a value that is not JSON") from error
+    text = body + "\n"
     limit = RECORD_LIMITS[type(record)]
     if len(text.encode("utf-8")) > limit:
         raise ValidationError(f"record is over its {limit // 1024} KiB limit")
@@ -198,6 +229,12 @@ def _text(value: Any) -> str:
 def _integer(value: Any, low: int, high: int) -> int:
     if isinstance(value, bool) or not isinstance(value, int) or not low <= value <= high:
         raise ValueError("integer out of range")
+    return value
+
+
+def _flag(value: Any) -> bool:
+    if not isinstance(value, bool):
+        raise ValueError("expected true or false")
     return value
 
 
@@ -267,6 +304,7 @@ _ID_FIELD: dict[type[AnyRecord], str] = {
     LeaseRecord: "profile_id",
     MessageRecord: "message_id",
     ClusterManifest: "team_label",
+    SharedRecord: "dataset",
 }
 
 
@@ -290,6 +328,7 @@ def _from_data(record_type: type[R], data: dict[str, Any]) -> R:
             share_queue_limits=_optional_share_map(data, "share_queue_limits"),
             node_quota=_optional_node_quota(data),
             profile_source=_source(data.get("profile_source", SOURCE_DEFAULT)),
+            shared_collector=_flag(data.get("shared_collector", False)),
         )
     if record_type is ProfileRecord:
         return ProfileRecord(  # type: ignore[return-value]
@@ -329,6 +368,16 @@ def _from_data(record_type: type[R], data: dict[str, Any]) -> R:
             in_reply_to=None if reply is None else _ident(reply, "message id"),
             body=body,
         )
+    if record_type is SharedRecord:
+        payload = data["payload"]
+        if not isinstance(payload, dict):
+            raise ValueError("payload must be an object")
+        return SharedRecord(  # type: ignore[return-value]
+            schema_version=SCHEMA_VERSION,
+            dataset=validate_dataset(data["dataset"]),
+            collector_node_id=_ident(data["collector_node_id"], "node id"),
+            payload=payload,
+        )
     if record_type is ClusterManifest:
         return ClusterManifest(  # type: ignore[return-value]
             schema_version=SCHEMA_VERSION,
@@ -355,3 +404,8 @@ def decode_message(text: str, expected_id: str | None = None) -> MessageRecord |
 
 def decode_manifest(text: str) -> ClusterManifest | Unreadable:
     return _build(ClusterManifest, text, None)
+
+
+def decode_shared(text: str, expected_dataset: str | None = None) -> SharedRecord | Unreadable:
+    """A shared dataset file. ``expected_dataset`` must equal the envelope's dataset when given."""
+    return _build(SharedRecord, text, expected_dataset)

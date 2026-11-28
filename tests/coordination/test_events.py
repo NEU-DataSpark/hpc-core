@@ -83,8 +83,8 @@ def test_emitting_an_unknown_event_name_is_an_error() -> None:
         events.emit("made.up")
 
 
-def test_the_vocabulary_is_the_sixteen_events_of_design_d15() -> None:
-    assert len(events.EVENTS) == 16
+def test_the_vocabulary_is_the_nineteen_events_of_design_d15_and_the_shared_data_change() -> None:
+    assert len(events.EVENTS) == 19
     assert {
         "node.registered",
         "node.beat",
@@ -102,4 +102,7 @@ def test_the_vocabulary_is_the_sixteen_events_of_design_d15() -> None:
         "message.acked",
         "record.unreadable",
         "store.error",
+        "shared.published",
+        "shared.read_failed",
+        "shared.collector_changed",
     } == set(events.EVENTS)

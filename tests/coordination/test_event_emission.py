@@ -13,6 +13,7 @@ from hpc_core.coordination.limits import LeaseHandle, acquire, release, renew, r
 from hpc_core.coordination.messages import SendRefused, acknowledge, send
 from hpc_core.coordination.records import LeaseRecord, encode
 from hpc_core.coordination.registry import NodeIdentity, NodeSession, discover, init_layout, prune
+from hpc_core.coordination.shared import publish_shared, read_shared
 from hpc_core.coordination.store import FolderStore, LocalFolderStore, StoreError
 from hpc_core.testing import ManualClock, MemoryFolderStore
 from hpc_core.testing.fault_store import FaultyFolderStore
@@ -223,6 +224,10 @@ def _run_scenarios(store: FolderStore, clock: ManualClock) -> None:
     session = NodeSession(store, _identity("alice-skill-a1", limit=1), clock=clock.now)
     session.register()
     session.beat()
+    publish_shared(store, "queue", node_id="alice-skill-a1", payload={"running": 2})
+    unreachable = FaultyFolderStore(store, failures=[StoreError("unreachable", kind="unreachable")])
+    with pytest.raises(StoreError):
+        read_shared(unreachable, "queue")
     acquired = acquire(
         store, "alice", node_id="alice-skill-a1", interval_seconds=60, clock=clock.now
     )
@@ -264,3 +269,18 @@ def test_no_event_holds_a_folder_path_a_key_or_a_message_body(
             assert root not in text
         assert "/" not in text and "\\" not in text
         assert "=" not in text
+
+
+def test_the_shared_events_carry_ids_and_counts(caplog: pytest.LogCaptureFixture) -> None:
+    clock = ManualClock(time.time())
+    target = MemoryFolderStore(clock=clock)
+    init_layout(target, "team")
+    _run_scenarios(target, clock)
+    shared = [r for r in caplog.records if getattr(r, "hpc_event", "").startswith("shared.")]
+    names = {r.hpc_event for r in shared}  # type: ignore[attr-defined]
+    assert {"shared.published", "shared.read_failed"} <= names
+    for record in shared:
+        for value in record.hpc_fields.values():  # type: ignore[attr-defined]
+            assert value is None or isinstance(value, (bool, int, float, str))
+            if isinstance(value, str):
+                assert "/" not in value and "\\" not in value and "=" not in value

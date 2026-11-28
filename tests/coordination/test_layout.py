@@ -87,3 +87,32 @@ def test_a_profile_holds_at_most_sixteen_types() -> None:
 def test_a_type_given_twice_after_folding_is_refused() -> None:
     with pytest.raises(ValidationError, match="more than once"):
         layout.validate_share_pairs([("h200", 1), ("H200", 2)])
+
+
+@pytest.mark.parametrize("name", ["../x", "Queue", "", "x" * 40, "9lives", "a/b", "has space"])
+def test_unsafe_dataset_names_are_refused_with_the_rule(name: str) -> None:
+    with pytest.raises(ValidationError, match="must be 1 to 32 lower-case letters"):
+        layout.validate_dataset(name)
+
+
+@pytest.mark.parametrize("name", ["queue", "physical", "a", "a-b-2", "x" * 32])
+def test_accepted_dataset_names(name: str) -> None:
+    assert layout.validate_dataset(name) == name
+
+
+def test_the_shared_file_path_is_under_the_shared_folder() -> None:
+    assert layout.shared_path("queue") == "_cluster/shared/queue.txt"
+    assert layout.shared_dir() == "_cluster/shared"
+    with pytest.raises(ValidationError):
+        layout.shared_path("../x")
+
+
+def test_shared_is_not_an_initialised_subfolder_and_init_creates_no_shared_folder() -> None:
+    from hpc_core.coordination.registry import init_layout
+    from hpc_core.testing import MemoryFolderStore
+
+    assert "shared" not in layout.SUBFOLDERS
+    assert layout.SHARED_RECORD_LIMIT == 1024 * 1024
+    folder = MemoryFolderStore()
+    init_layout(folder, "team")
+    assert "shared" not in folder.list_subdirs("_cluster")

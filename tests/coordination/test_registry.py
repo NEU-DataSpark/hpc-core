@@ -278,3 +278,30 @@ def test_a_corrupt_own_record_is_taken_over(store: MemoryFolderStore, clock: Man
     assert isinstance(
         decode_node(store.read_text(layout.node_path("alice-console-a1"))), NodeRecord
     )
+
+
+def test_a_beat_writes_the_collector_mark_and_only_this_nodes_record(
+    store: MemoryFolderStore, clock: ManualClock
+) -> None:
+    alice = NodeSession(
+        store,
+        NodeIdentity("alice-console-a1", "alice", "console", shared_collector=True),
+        clock=clock.now,
+    )
+    bob = NodeSession(
+        store,
+        NodeIdentity("alice-console-b2", "alice", "console", shared_collector=False),
+        clock=clock.now,
+    )
+    assert alice.register().outcome == "registered"
+    assert bob.register().outcome == "registered"
+    assert alice.beat().outcome == "beat"
+    marked = decode_node(store.read_text(layout.node_path("alice-console-a1")), "alice-console-a1")
+    plain = decode_node(store.read_text(layout.node_path("alice-console-b2")), "alice-console-b2")
+    assert isinstance(marked, NodeRecord) and marked.shared_collector is True
+    assert isinstance(plain, NodeRecord) and plain.shared_collector is False
+
+
+def test_the_mark_must_be_a_boolean_in_the_identity() -> None:
+    with pytest.raises(ValidationError, match="true or false"):
+        NodeIdentity("alice-console-a1", "alice", "console", shared_collector=1)  # type: ignore[arg-type]

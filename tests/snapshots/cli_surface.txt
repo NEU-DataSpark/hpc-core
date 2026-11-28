@@ -19,6 +19,9 @@ hpc-core cluster check
   --root ROOT (required)
   --verbose
   --read-only
+hpc-core cluster collector
+  --root ROOT (required)
+  --verbose
 hpc-core cluster inbox
   --root ROOT (required)
   --verbose
@@ -54,6 +57,10 @@ hpc-core cluster send
   --type TYPE (required)
   --body-file BODY_FILE
   --reply-to REPLY_TO
+hpc-core cluster shared
+  --root ROOT (required)
+  --verbose
+  --dataset NAME (required)
 hpc-core commands
 hpc-core commands capacity
   --profile {capacity}
