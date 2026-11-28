@@ -20,6 +20,7 @@ _cluster/
   leases/<profile_id>/slot-NN.json  one lease per slot in use
   inbox/<node_id>/<message_id>.json  pending messages
   inbox/<node_id>/done/<message_id>.json  acknowledged messages
+  shared/<dataset>.txt      shared dataset files (the first publish creates the folder)
 ```
 
 Nothing outside `_cluster` is written. Readers ignore names that start with a dot. Writers create a
@@ -48,6 +49,7 @@ Fields are sorted by name.
 | Profile | `schema_version`, `profile_id`, `concurrency_limit`, `updated_by`, `updated_at` | 16 KiB |
 | Lease | `schema_version`, `profile_id`, `slot`, `node_id`, `acquired_at`, `interval_seconds` | 16 KiB |
 | Message | `schema_version`, `message_id`, `type`, `from_node`, `to_node`, `created_at`, `expires_at`, `in_reply_to`, `body` | 64 KiB |
+| Shared dataset | `schema_version`, `dataset`, `collector_node_id`, `payload` | 1 MiB |
 
 `kind` is one of `console`, `skill` or `cli`. Times are ISO 8601 in UTC with a `Z` suffix.
 
@@ -148,6 +150,54 @@ record unreadable, and the record is then not used for any decision.
 | profile | `share_queue_limits`: the account quota per type |
 | node | `share_queue_limits`: the effective limits; `node_quota`: the explicit values, present only when explicit; `profile_source`: `default` or `explicit` |
 | lease | `accelerator`: the type of a typed lease, absent for an untyped one |
+| node | `shared_collector`: `true` when the node may collect shared datasets; absent means `false`, and a value that is not a boolean makes the record unreadable |
+
+## Shared datasets
+
+Some data does not depend on any account, such as how many nodes of each partition are idle. The team
+collects it once per interval and every node reads it from a file, instead of each node asking the
+scheduler. The protocol moves an opaque payload under a dataset name. It does not decide what a
+payload may hold; the node that collects a dataset does, and this package checks only the envelope,
+the name and the size.
+
+Each dataset is one file, `shared/<dataset>.txt`, holding one JSON object with the four fields in the
+record table above. For example, with placeholder ids:
+
+```text
+{"collector_node_id":"alice-console-a1","dataset":"queue","payload":{"partitions":[]},"schema_version":1}
+```
+
+- A dataset name is 1 to 32 lower-case letters, digits or hyphens, starting with a letter. Any other
+  name, such as `../x` or `Queue`, is refused before a file is read or written.
+- The payload is a JSON object. The file is at most 1 MiB. A larger payload is refused and the
+  previous file stays in place.
+- The `shared` folder is created by the first publish. `init` does not create it, and a team that
+  never publishes has none.
+- A publish writes the whole file under a dot-prefixed temporary name and renames it over the target,
+  so a reader sees the old file or the new one, never a mix, and a writer that stops before the
+  rename leaves the old file.
+- A reader reports three different outcomes. A file that cannot be parsed, has an unsupported
+  `schema_version`, has a payload that is not an object, or names another dataset is *unreadable*,
+  and its payload is not used. No file is *missing*. A folder that cannot be reached is a store
+  error, never reported as missing.
+
+**The collector.** A node is a collector candidate when its record has `shared_collector: true`. The
+collector is the candidate with the smallest node id among the nodes that discovery reports
+`online`. Every node computes this from the discovery it already makes, so nothing is written to
+choose it, and no lock or lease is taken. When no candidate is online there is no collector. When the
+collector goes quiet, the next smallest candidate becomes the collector at its next discovery, and
+the first one takes the role back when it is online again.
+
+**The due check.** The collector collects a dataset and publishes it only when the file is missing,
+unreadable, or older than the dataset's interval by the folder's clock. A fresh file stops a second
+collector, so two nodes that briefly both believe they are the collector collect at most once per
+interval. A node that is not the collector never publishes.
+
+**Ages.** A file's age is the folder's current time minus the file's time, both read from the folder.
+A node's own clock never decides whether a shared file is fresh.
+
+The election is advisory. A wrong or late answer costs at most one extra collection, and it never
+changes a lease, a limit or a message.
 
 ## Messages
 
@@ -168,8 +218,9 @@ sends from one sender in the same millisecond still sort in send order.
 
 Access control is the folder's permissions. Anyone who can write the folder can write any record.
 The sender id in a message is a claim, not an authenticated identity. Do not put secrets, keys,
-tokens or passwords in messages or node fields. Treat message bodies and node names as untrusted
-data: display them, and do not act on them without a person confirming.
+tokens or passwords in messages or node fields. Treat message bodies, node names and shared payloads
+as untrusted data: display them, and do not act on them without a person confirming. A shared file
+is data, never a command to run.
 
 ## Events
 
@@ -178,7 +229,12 @@ has a `NullHandler`, so nothing is printed unless the host attaches a handler. T
 
 `node.registered`, `node.beat`, `node.beat_failed`, `node.conflict`, `node.left`, `node.pruned`,
 `lease.acquired`, `lease.denied`, `lease.reclaimed`, `lease.lost`, `lease.repaired`,
-`message.sent`, `message.refused`, `message.acked`, `record.unreadable`, `store.error`.
+`message.sent`, `message.refused`, `message.acked`, `record.unreadable`, `store.error`,
+`shared.published`, `shared.read_failed`.
+
+`shared.collector_changed` is also in the vocabulary, for a host that reports a hand-over. This
+package does not emit it: the election is a function of discovery, and the host knows what it last
+saw.
 
 Every event carries only ids, counts, durations and short codes. A field that looks like a path, a
 key-like `name=value` pair or free text, or that is longer than 64 characters, is refused, so a
@@ -206,6 +262,8 @@ repeating it adds debug detail. Output is JSON on standard output. The exit stat
 | `hpc-core cluster limits --root TEAM --profile alice --node-id alice-console-a1 --show-node` | Shows the account quota, node quota, effective limits and source of a node. |
 | `hpc-core cluster limits --root TEAM --profile alice --node-id alice-console-a1 --reset-node` | Removes a node's explicit values so it follows the account quota. |
 | `hpc-core cluster check --root TEAM --read-only` | Runs the self-check and prints each finding. |
+| `hpc-core cluster collector --root TEAM` | Shows the elected collector (or `null`) and the age of each shared file. Reads only. |
+| `hpc-core cluster shared --root TEAM --dataset queue` | Shows one shared dataset: its payload, age and collector; `status` is `missing` when there is no file. Reads only. |
 
 `TEAM` stands for the team folder, `MESSAGE_ID` for a message id printed by `inbox`.
 

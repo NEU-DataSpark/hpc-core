@@ -28,6 +28,15 @@ The package uses semantic versioning, `MAJOR.MINOR.PATCH`.
 
 ## Version notes
 
+- **0.6.0** (minor, additive). Adds shared datasets: the `shared` folder with one file per dataset
+  (`shared/<dataset>.txt`), the optional node field `shared_collector`, and the envelope
+  `SharedRecord` at record `schema_version` 1. The `hpc_core.coordination` names are new
+  (`elect_collector`, `should_collect`, `publish_shared`, `read_shared`, `shared_ages`, `decode_shared`,
+  `validate_dataset`, `SharedCopy`, `SharedMissing`, `SharedResult`, `SharedRecord`,
+  `SHARED_RECORD_LIMIT`), as are the events `shared.published`, `shared.read_failed` and
+  `shared.collector_changed`, and the commands `cluster collector` and `cluster shared`. Nothing is
+  removed or renamed, and the existing record fields are unchanged. `pyproject.toml` and the skills'
+  `metadata.version` are set to 0.6.0 with this change.
 - **0.5.0** (minor, additive). Adds the profile set model (`ProfileEntry`, `ProfileSet`, `parse_profile_set`, `identities_for` and the mode names in `hpc_core.coordination`) and the `cluster profiles` command. Nothing is removed or renamed, and the record `schema_version` is unchanged. `pyproject.toml` and the skills' `metadata.version` are set to 0.5.0 with this change. Version 0.4.0 is the release of per-accelerator node quotas.
 - **Unreleased, planned for 0.3.0** (minor, additive). Adds the `hpc-core` command and
   `python -m hpc_core`, with the `parse`, `report`, `commands`, `skills` and `cluster` groups, and
