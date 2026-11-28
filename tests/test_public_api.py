@@ -50,7 +50,27 @@ EXPECTED_CONTRACT = {
     "validate_job_id",
     "wait_seconds",
 }
-EXPECTED_TRANSPORT = {"CommandResult", "CommandTransport", "TransportError", "TransportTimeout"}
+EXPECTED_TRANSPORT = {
+    "COMMANDS_PATH",
+    "CommandRequest",
+    "CommandResult",
+    "CommandTransport",
+    "ErrorBody",
+    "ErrorKind",
+    "InputTooLarge",
+    "PROTOCOL_VERSION",
+    "STATUS_BY_KIND",
+    "TransportError",
+    "TransportTimeout",
+    "WireFormatError",
+    "decode_error",
+    "decode_request",
+    "decode_result",
+    "encode_error",
+    "encode_request",
+    "encode_result",
+    "raise_for_error",
+}
 EXPECTED_COORDINATION = {
     "AcceleratorUsage",
     "AckResult",

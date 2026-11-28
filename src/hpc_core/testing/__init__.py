@@ -19,6 +19,7 @@ from .fault_store import FaultyFolderStore
 from .fixtures import load_case, load_cases
 from .memory_store import ManualClock, MemoryFolderStore
 from .subprocess_transport import SubprocessTransport
+from .wire_examples import REFERENCE_WIRE_CODEC, WireCodec, check_wire_conformance
 
 __all__ = [
     "ContractFailure",
@@ -27,11 +28,14 @@ __all__ = [
     "JobReader",
     "ManualClock",
     "MemoryFolderStore",
+    "REFERENCE_WIRE_CODEC",
     "SimulatedFolderTransport",
     "SubprocessTransport",
+    "WireCodec",
     "canonical_samples",
     "check_reader",
     "check_store_conformance",
+    "check_wire_conformance",
     "check_writer",
     "load_case",
     "load_cases",
